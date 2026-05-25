@@ -18,6 +18,10 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "Lume",
   description: "Thread visibility cockpit anchored on your calendar horizon.",
+  icons: {
+    icon: [{ url: "/lume-icon.svg", type: "image/svg+xml" }],
+    apple: [{ url: "/lume-icon.svg", type: "image/svg+xml" }],
+  },
 };
 
 export default function RootLayout({

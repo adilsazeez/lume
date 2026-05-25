@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="./public/lume-logo.svg" alt="Lume logo" width="200">
+</p>
+
 # Lume
 
 A personal **thread visibility cockpit** — see every ongoing effort on a calendar horizon, not buried in a flat todo list.
