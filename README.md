@@ -1,36 +1,42 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Lume
 
-## Getting Started
+A personal **thread visibility cockpit** — see every ongoing effort on a calendar horizon, not buried in a flat todo list.
 
-First, run the development server:
+## Why
+
+I built Lume while juggling several parallel commitments with different deadlines. Task apps showed *what* to do, but not *when things overlap*, *what's due soon*, or *what deserves attention today*. Lume treats each commitment as a **thread** with a start and due date on a timeline, so parallel work stays visible at a glance.
+
+## Local setup
+
+**Prerequisites:** Node.js 20+, a [Supabase](https://supabase.com) project
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+git clone https://github.com/<you>/lume.git
+cd lume
+npm install
+cp .env.example .env.local
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+1. Add your Supabase **URL** and **anon key** to `.env.local`.
+2. Run `supabase/schema.sql` in the Supabase SQL editor.
+3. Start the dev server: `npm run dev` → http://localhost:3000
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+Optional: set `DATE_TZ=America/New_York` (or any IANA timezone) so server-rendered "today" matches your wall clock.
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Example threads in life
 
-## Learn More
+These are the kinds of threads Lume is built for — ongoing efforts with a start and end, not one-off tasks:
 
-To learn more about Next.js, take a look at the following resources:
+| Thread | Category | What it tracks |
+|--------|----------|----------------|
+| Job search | Career | Applications, networking, follow-ups |
+| Product launch | Work | Milestones toward a v1 release |
+| Certification study | Learning | Modules and practice leading up to an exam |
+| Home renovation | Personal | Phases from planning through completion |
+| Race training | Health | Weekly sessions building toward event day |
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+Each thread can have **subthreads** (checklist items), **daily logs** (short notes per day), and a **Today focus** pin so your morning scan stays calm.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Stack
 
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Next.js · TypeScript · Tailwind · Supabase · Zustand · Framer Motion
