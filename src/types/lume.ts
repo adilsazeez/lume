@@ -47,11 +47,32 @@ export type TodaySelectionRow = {
   is_selected: boolean;
 };
 
+export type MiniTaskStatus = "open" | "in_progress" | "done";
+
+export type MiniTaskPriority = "low" | "medium" | "high";
+
+export type MiniTaskRow = {
+  id: string;
+  thread_id: string;
+  title: string;
+  note: string | null;
+  due_date: string | null;
+  status: MiniTaskStatus;
+  priority: MiniTaskPriority | null;
+  created_at: string;
+  updated_at: string;
+  completed_at: string | null;
+  thread?: Pick<ThreadRow, "id" | "name" | "color"> | null;
+};
+
+export type MiniTaskFilter = "all" | "today" | "upcoming" | "done";
+
 export type DashboardPayload = {
   categories: CategoryRow[];
   timelineThreads: ThreadRow[];
   allThreads?: ThreadRow[];
   todaySelections: TodaySelectionRow[];
   todayLogs: DailyLogRow[];
+  miniTasks: MiniTaskRow[];
   serverTodayISO: string;
 };

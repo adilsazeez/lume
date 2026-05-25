@@ -23,6 +23,8 @@ import {
   timelineRowMaxPx,
   timelineTrackMinWidthPx,
 } from "./thread-timeline";
+import { ThreadInlineAddTaskButton } from "./thread-inline-add-task-button";
+import { EllipsisText } from "./ellipsis-text";
 
 const PRESETS = ["day", "year"] as const satisfies readonly TimelinePreset[];
 
@@ -206,7 +208,7 @@ function ThreadRailLabel({
   focused?: boolean;
 }) {
   return (
-    <div id={id} title={name} className="flex min-w-0 items-start gap-2 px-3 py-1.5">
+    <div id={id} className="flex min-w-0 items-start gap-2 px-3 py-1.5">
       <span
         aria-hidden
         className="mt-1 size-2 shrink-0 rounded-full"
@@ -218,19 +220,19 @@ function ThreadRailLabel({
       <div className="min-w-0 flex-1">
         <p
           className={cn(
-            "truncate text-[13px] leading-snug",
+            "text-[13px] leading-snug",
             dimmed ? "text-foreground/38" : focused ? "text-foreground" : "text-foreground/88",
           )}
         >
-          {name}
+          <EllipsisText text={name} lines={3} />
         </p>
         <p
           className={cn(
-            "truncate text-[10px] leading-tight",
+            "text-[10px] leading-tight",
             dimmed ? "text-muted-foreground/32" : "text-muted-foreground/72",
           )}
         >
-          {categoryName ?? "Uncategorized"}
+          <EllipsisText text={categoryName ?? "Uncategorized"} lines={1} />
         </p>
       </div>
     </div>
@@ -242,11 +244,13 @@ function ThreadRailGroup({
   busy,
   rowHeightPx,
   onToggleToday,
+  onAddMiniTask,
 }: {
   tv: TimelineThreadView;
   busy: boolean;
   rowHeightPx: number;
   onToggleToday: (threadId: string, next: boolean) => void;
+  onAddMiniTask?: (threadId: string) => void;
 }) {
   const labelId = `lume-thread-${tv.thread.id}`;
 
@@ -257,7 +261,7 @@ function ThreadRailGroup({
     >
       <div
         className={cn(
-          "flex h-full items-start border-l-2",
+          "group/row flex h-full items-center border-l-2",
           tv.isSelectedToday ?
             "border-l-violet-400/75 bg-violet-500/[0.07]"
           : "border-l-transparent",
@@ -285,10 +289,17 @@ function ThreadRailGroup({
 
         <div
           className={cn(
-            "relative z-[21] shrink-0 px-2.5 pt-2.5",
+            "relative z-[21] flex w-[3.75rem] shrink-0 items-center justify-end gap-1.5 pr-2.5",
             tv.dimmed && "opacity-45",
           )}
         >
+          {onAddMiniTask ?
+            <ThreadInlineAddTaskButton
+              threadName={tv.thread.name}
+              disabled={busy}
+              onClick={() => onAddMiniTask(tv.thread.id)}
+            />
+          : null}
           <Switch
             size="sm"
             checked={tv.isSelectedToday}
@@ -360,11 +371,13 @@ export function TimelineCanvas({
   todayISO,
   busy,
   onToggleToday,
+  onAddMiniTask,
 }: {
   threadViews: TimelineThreadView[];
   todayISO: string;
   busy: boolean;
   onToggleToday: (threadId: string, next: boolean) => void;
+  onAddMiniTask?: (threadId: string) => void;
 }) {
   const [preset, setPreset] = React.useState<TimelinePreset>("day");
   const [dayWindow, setDayWindow] = React.useState({
@@ -574,7 +587,14 @@ export function TimelineCanvas({
                   style={{ height: axisMinH, minHeight: axisMinH }}
                 >
                   <span className="text-[11px] font-medium text-muted-foreground">Threads</span>
-                  <span className="text-[10px] font-medium text-muted-foreground/70">Today</span>
+                  <div className="flex w-[3.75rem] shrink-0 items-center justify-end gap-1.5 pr-2.5">
+                    <span className="w-6 text-center text-[9px] font-medium uppercase tracking-wide text-muted-foreground/55">
+                      Task
+                    </span>
+                    <span className="w-6 text-center text-[9px] font-medium uppercase tracking-wide text-muted-foreground/55">
+                      Today
+                    </span>
+                  </div>
                 </div>
               </aside>
 
@@ -632,6 +652,7 @@ export function TimelineCanvas({
                         busy={busy}
                         rowHeightPx={threadRowHeightPx}
                         onToggleToday={onToggleToday}
+                        onAddMiniTask={onAddMiniTask}
                       />
                     ))
                   )}

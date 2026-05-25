@@ -25,7 +25,13 @@ export function LumeTopRail({
     <header className="z-30 shrink-0 border-b border-white/[0.08] bg-background/95 backdrop-blur-md">
       <div className="flex h-11 items-center gap-3 px-4">
         <div className="flex min-w-0 items-center gap-2.5">
-          <h1 className="truncate text-[13px] font-medium tracking-[0.12em] text-foreground/90 uppercase">
+          <h1 className="flex min-w-0 items-center gap-2 truncate text-[13px] font-medium tracking-[0.12em] text-foreground/90 uppercase">
+            <img
+              src="/lume-icon.svg"
+              alt=""
+              aria-hidden
+              className="size-[18px] shrink-0"
+            />
             Lume
           </h1>
           {todayCue ?

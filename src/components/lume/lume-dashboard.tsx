@@ -4,11 +4,13 @@ import * as React from "react";
 import { format } from "date-fns";
 import { Plus } from "lucide-react";
 
-import type { DashboardPayload, ThreadRow, ThreadStatus } from "@/types/lume";
+import type { DashboardPayload, MiniTaskPriority, MiniTaskRow, MiniTaskStatus, ThreadRow, ThreadStatus } from "@/types/lume";
 
 import { Button } from "@/components/ui/button";
 import { CategoryManagerDialog } from "@/components/lume/category-manager-dialog";
+import { CreateMiniTaskDialog, type CreateMiniTaskPayload } from "@/components/lume/create-mini-task-dialog";
 import { LumeTopRail } from "@/components/lume/lume-top-rail";
+import { MiniTaskPanel } from "@/components/lume/mini-task-panel";
 import { ThreadDetailSheet } from "@/components/lume/thread-detail-sheet";
 import { ThreadFormDialog } from "@/components/lume/thread-form-dialog";
 import { TimelineCanvas } from "@/components/lume/timeline-canvas";
@@ -59,6 +61,10 @@ function DashboardBody({ initial }: { initial: DashboardPayload }) {
 
   const [detailId, setDetailId] = React.useState<string | null>(null);
   const [detailDraft, setDetailDraft] = React.useState("");
+
+  const [miniTaskFormOpen, setMiniTaskFormOpen] = React.useState(false);
+  const [miniTaskPresetThreadId, setMiniTaskPresetThreadId] = React.useState<string | null>(null);
+  const [miniTaskFormNonce, setMiniTaskFormNonce] = React.useState(0);
 
   React.useEffect(() => {
     isoRef.current = dash.serverTodayISO;
@@ -350,6 +356,127 @@ function DashboardBody({ initial }: { initial: DashboardPayload }) {
     launchComposer(null);
   }, [launchComposer]);
 
+  const openMiniTaskComposer = React.useCallback((threadId: string | null = null) => {
+    setMiniTaskPresetThreadId(threadId);
+    setMiniTaskFormNonce((n) => n + 1);
+    setMiniTaskFormOpen(true);
+  }, []);
+
+  const patchMiniTaskLocal = React.useCallback((taskId: string, patch: Partial<MiniTaskRow>) => {
+    setDash((prev) => ({
+      ...prev,
+      miniTasks: prev.miniTasks.map((t) => (t.id === taskId ? { ...t, ...patch } : t)),
+    }));
+  }, []);
+
+  const createMiniTask = async (payload: CreateMiniTaskPayload | { thread_id: string; title: string }) => {
+    setBusy(true);
+
+    try {
+      const sb = createBrowserSupabase();
+      const body = {
+        thread_id: payload.thread_id,
+        title: payload.title,
+        note: "note" in payload ? (payload.note ?? null) : null,
+        due_date: "due_date" in payload ? (payload.due_date ?? null) : dash.serverTodayISO,
+        priority: "priority" in payload ? (payload.priority ?? null) : null,
+        status: "open" as const,
+      };
+
+      const { error } = await sb.from("mini_tasks").insert(body);
+      if (error) throw error;
+      await reload();
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const updateMiniTaskStatus = async (taskId: string, status: MiniTaskStatus) => {
+    const prev = dash.miniTasks.find((t) => t.id === taskId);
+    if (!prev) return;
+
+    const completed_at = status === "done" ? new Date().toISOString() : null;
+    patchMiniTaskLocal(taskId, { status, completed_at });
+
+    setBusy(true);
+
+    try {
+      const sb = createBrowserSupabase();
+      const { error } = await sb
+        .from("mini_tasks")
+        .update({ status, completed_at })
+        .eq("id", taskId);
+
+      if (error) throw error;
+    } catch {
+      patchMiniTaskLocal(taskId, { status: prev.status, completed_at: prev.completed_at });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const updateMiniTaskFields = async (
+    taskId: string,
+    patch: Partial<Pick<MiniTaskRow, "title" | "note" | "due_date" | "priority">>,
+  ) => {
+    const prev = dash.miniTasks.find((t) => t.id === taskId);
+    if (!prev) return;
+
+    patchMiniTaskLocal(taskId, patch);
+
+    setBusy(true);
+
+    try {
+      const sb = createBrowserSupabase();
+      const { error } = await sb.from("mini_tasks").update(patch).eq("id", taskId);
+      if (error) throw error;
+    } catch {
+      const revert: Partial<MiniTaskRow> = {};
+      if ("title" in patch) revert.title = prev.title;
+      if ("note" in patch) revert.note = prev.note;
+      if ("due_date" in patch) revert.due_date = prev.due_date;
+      if ("priority" in patch) revert.priority = prev.priority;
+      patchMiniTaskLocal(taskId, revert);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const updateMiniTaskTitle = async (taskId: string, title: string) => {
+    await updateMiniTaskFields(taskId, { title });
+  };
+
+  const updateMiniTaskNote = async (taskId: string, note: string | null) => {
+    await updateMiniTaskFields(taskId, { note });
+  };
+
+  const updateMiniTaskDueDate = async (taskId: string, dueDate: string | null) => {
+    await updateMiniTaskFields(taskId, { due_date: dueDate });
+  };
+
+  const updateMiniTaskPriority = async (taskId: string, priority: MiniTaskPriority | null) => {
+    await updateMiniTaskFields(taskId, { priority });
+  };
+
+  const deleteMiniTask = async (taskId: string) => {
+    setBusy(true);
+
+    try {
+      const sb = createBrowserSupabase();
+      const { error } = await sb.from("mini_tasks").delete().eq("id", taskId);
+      if (error) throw error;
+
+      setDash((prev) => ({
+        ...prev,
+        miniTasks: prev.miniTasks.filter((t) => t.id !== taskId),
+      }));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const threadPickerRows = dash.allThreads ?? dash.timelineThreads;
+
   return (
     <>
       <div className="flex h-dvh flex-col overflow-hidden bg-background text-foreground">
@@ -363,6 +490,17 @@ function DashboardBody({ initial }: { initial: DashboardPayload }) {
             onClick={() => setCatsOpen(true)}
           >
             Categories
+          </Button>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="h-7 px-2 text-[11px] text-muted-foreground"
+            disabled={busy}
+            onClick={() => openMiniTaskComposer()}
+          >
+            <Plus aria-hidden className="size-3.5" />
+            Task
           </Button>
           <Button type="button" size="sm" className="h-7 px-2.5 text-[11px]" disabled={busy} onClick={() => openComposer()}>
             <Plus aria-hidden className="size-3.5" />
@@ -394,31 +532,62 @@ function DashboardBody({ initial }: { initial: DashboardPayload }) {
           }}
         />
 
-        <main className="flex min-h-0 min-w-0 flex-1 flex-col gap-2 overflow-hidden px-3 pb-3 pt-2 font-sans">
-          {todayFocusActive && selectionCount === 0 && dash.timelineThreads.length > 0 ?
-            <p className="shrink-0 rounded-md border border-amber-950/50 bg-amber-950/28 px-2.5 py-1.5 text-[11px] text-amber-50/95 leading-snug">
-              Mark threads for today using the toggles on the timeline.
-            </p>
-          : null}
+        <CreateMiniTaskDialog
+          key={miniTaskFormNonce}
+          open={miniTaskFormOpen}
+          busy={busy}
+          threads={threadPickerRows}
+          presetThreadId={miniTaskPresetThreadId}
+          todayISO={dash.serverTodayISO}
+          onSubmit={(p) => createMiniTask(p)}
+          onOpenChange={(v) => {
+            setMiniTaskFormOpen(v);
+            if (!v) setMiniTaskPresetThreadId(null);
+          }}
+        />
 
-          {dash.timelineThreads.length === 0 ?
-            <div className="flex flex-1 flex-col items-center justify-center rounded-2xl border border-dashed border-white/18 bg-muted/70 py-20">
-              <p className="mb-10 max-w-md px-8 text-center text-sm text-muted-foreground">
-                No active timelines yet. Bring threads into Lume once and they glow across mornings so nothing quietly stalls.
+        <div className="flex min-h-0 min-w-0 flex-1 gap-2 overflow-hidden px-3 pb-3 pt-2 font-sans">
+          <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-2 overflow-hidden">
+            {todayFocusActive && selectionCount === 0 && dash.timelineThreads.length > 0 ?
+              <p className="shrink-0 rounded-md border border-amber-950/50 bg-amber-950/28 px-2.5 py-1.5 text-[11px] text-amber-50/95 leading-snug">
+                Mark threads for today using the toggles on the timeline.
               </p>
-              <Button size="lg" type="button" onClick={() => openComposer()} disabled={busy}>
-                Bring a thread to life
-              </Button>
-            </div>
-          : (
-            <TimelineCanvas
-              threadViews={threadViews}
-              todayISO={dash.serverTodayISO}
-              busy={busy}
-              onToggleToday={(threadId, next) => toggleToday(threadId, next)}
-            />
-          )}
-        </main>
+            : null}
+
+            {dash.timelineThreads.length === 0 ?
+              <div className="flex flex-1 flex-col items-center justify-center rounded-2xl border border-dashed border-white/18 bg-muted/70 py-20">
+                <p className="mb-10 max-w-md px-8 text-center text-sm text-muted-foreground">
+                  No active timelines yet. Bring threads into Lume once and they glow across mornings so nothing quietly stalls.
+                </p>
+                <Button size="lg" type="button" onClick={() => openComposer()} disabled={busy}>
+                  Bring a thread to life
+                </Button>
+              </div>
+            : (
+              <TimelineCanvas
+                threadViews={threadViews}
+                todayISO={dash.serverTodayISO}
+                busy={busy}
+                onToggleToday={(threadId, next) => toggleToday(threadId, next)}
+                onAddMiniTask={(threadId) => openMiniTaskComposer(threadId)}
+              />
+            )}
+          </div>
+
+          <MiniTaskPanel
+            tasks={dash.miniTasks}
+            threads={threadPickerRows}
+            todayISO={dash.serverTodayISO}
+            busy={busy}
+            onStatusChange={(taskId, status) => void updateMiniTaskStatus(taskId, status)}
+            onTitleChange={(taskId, title) => void updateMiniTaskTitle(taskId, title)}
+            onNoteChange={(taskId, note) => void updateMiniTaskNote(taskId, note)}
+            onDueDateChange={(taskId, dueDate) => void updateMiniTaskDueDate(taskId, dueDate)}
+            onPriorityChange={(taskId, priority) => void updateMiniTaskPriority(taskId, priority)}
+            onDelete={(taskId) => void deleteMiniTask(taskId)}
+            onQuickAdd={(p) => createMiniTask(p)}
+          />
+        </div>
       </div>
 
       <ThreadDetailSheet

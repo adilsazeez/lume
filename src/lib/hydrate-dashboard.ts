@@ -1,20 +1,22 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
-import type { CategoryRow, DailyLogRow, DashboardPayload, SubthreadRow, ThreadRow, TodaySelectionRow } from "@/types/lume";
+import type { CategoryRow, DailyLogRow, DashboardPayload, MiniTaskRow, SubthreadRow, ThreadRow, TodaySelectionRow } from "@/types/lume";
 
 async function hydratePayload(
   supabase: SupabaseClient,
   serverTodayISO: string,
 ): Promise<DashboardPayload> {
-  const [catRes, threadRes, subRes] = await Promise.all([
+  const [catRes, threadRes, subRes, miniTaskRes] = await Promise.all([
     supabase.from("categories").select("*").order("name", { ascending: true }),
     supabase.from("threads").select("*").order("due_date", { ascending: true }),
     supabase.from("subthreads").select("*").order("sort_order", { ascending: true }),
+    supabase.from("mini_tasks").select("*").order("created_at", { ascending: false }),
   ]);
 
   if (catRes.error) throw catRes.error;
   if (threadRes.error) throw threadRes.error;
   if (subRes.error) throw subRes.error;
+  if (miniTaskRes.error) throw miniTaskRes.error;
 
   const categoriesRows = ((catRes.data as CategoryRow[] | null) ?? []).slice();
 
@@ -31,6 +33,22 @@ async function hydratePayload(
   }
 
   const threadRows = (threadRes.data as ThreadRow[] | null) ?? [];
+
+  const threadsById = new Map<string, ThreadRow>(
+    threadRows.map((t) => [t.id, t]),
+  );
+
+  const miniTasks: MiniTaskRow[] = ((miniTaskRes.data as MiniTaskRow[] | null) ?? []).map(
+    (task) => {
+      const thread = threadsById.get(task.thread_id);
+      return {
+        ...task,
+        thread: thread ?
+          { id: thread.id, name: thread.name, color: thread.color }
+        : null,
+      };
+    },
+  );
 
   const hydrateThread = (t: ThreadRow): ThreadRow => ({
     ...t,
@@ -83,6 +101,7 @@ async function hydratePayload(
     allThreads: allThreadsHydrated,
     todaySelections,
     todayLogs,
+    miniTasks,
     serverTodayISO,
   };
 }
