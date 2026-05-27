@@ -2,65 +2,20 @@
 
 import type { CSSProperties } from "react";
 
-import type { TimelinePreset } from "@/lib/timeline";
+import type { ScrollableTimelineScale } from "@/lib/timeline-scale";
+import { getThreadSpanPxOnCanvas } from "@/lib/timeline-scale";
+import { clampThreadSpanToRange, urgencyForDueDate, type Urgency } from "@/lib/timeline";
 
 import { cn } from "@/lib/utils";
 import type { ThreadRow } from "@/types/lume";
-import {
-  clampThreadSpanToRange,
-  timelineBarMetrics,
-  urgencyForDueDate,
-  type Urgency,
-} from "@/lib/timeline";
 
-export function timelineRowPx(preset: TimelinePreset) {
-  return `${timelineRowMaxPx(preset)}px`;
-}
-
-export function timelineRowMaxPx(preset: TimelinePreset) {
-  if (preset === "year") return 72;
-  return 96;
-}
-
-export function timelineRowMinPx(preset: TimelinePreset) {
-  if (preset === "year") return 40;
-  return 44;
-}
-
-export function timelineAxisHeightPx(preset: TimelinePreset) {
-  if (preset === "year") return 56;
-  return 72;
-}
-
-export function timelineAxisPx(preset: TimelinePreset) {
-  return `${timelineAxisHeightPx(preset)}px`;
-}
-
-export function resolveTimelineLaneHeightPx(
-  threadCount: number,
-  viewportHeightPx: number,
-  preset: TimelinePreset,
-): number {
-  const max = timelineRowMaxPx(preset);
-  const axis = timelineAxisHeightPx(preset);
-
-  if (threadCount <= 0) return max;
-
-  const laneBudget = Math.max(viewportHeightPx - axis, 1);
-  const ideal = laneBudget / threadCount;
-
-  return Math.min(max, Math.floor(ideal));
-}
-
-export function threadBarLayout(laneHeightPx: number) {
-  const barHPx = Math.max(2, Math.round(laneHeightPx * 0.14));
-  const barTopPx = Math.max(1, Math.round((laneHeightPx - barHPx) / 2));
-  return { barTopPx, barHPx };
-}
-
-export function threadBarLayoutPercent() {
-  return { barTop: "42%", barHeight: "16%" } as const;
-}
+export const CANVAS_LABEL_W_MIN = 140;
+export const CANVAS_LABEL_W_DEFAULT = 192;
+export const CANVAS_LABEL_W_MAX = 280;
+/** @deprecated Use CANVAS_LABEL_W_DEFAULT or dynamic label width from useCanvasLabelWidth */
+export const CANVAS_LABEL_W = CANVAS_LABEL_W_DEFAULT;
+export const CANVAS_LANE_PITCH = 64;
+export const CANVAS_RULER_H = 52;
 
 export type TimelineThreadView = {
   thread: ThreadRow;
@@ -70,158 +25,100 @@ export type TimelineThreadView = {
   onOpen: () => void;
 };
 
-export function timelineDayWidthPx(preset: TimelinePreset) {
-  if (preset === "day") return 36;
-  return 9;
-}
-
-export function timelineTrackMinWidthPx(days: number, preset: TimelinePreset) {
-  return Math.max(days, 1) * timelineDayWidthPx(preset);
-}
-
-export function timelineGridTemplateCols(days: number, preset: TimelinePreset): CSSProperties {
-  const n = Math.max(days, 1);
-  const dayW = timelineDayWidthPx(preset);
-  return { gridTemplateColumns: `repeat(${n}, ${dayW}px)` };
-}
-
 function dueMarkerClass(urgency: Urgency) {
-  if (urgency === "hot") return "bg-rose-400";
-  if (urgency === "soon") return "bg-amber-400";
-  return "bg-muted-foreground/50";
+  if (urgency === "hot") return "bg-rose-400 shadow-[0_0_8px_rgba(251,113,133,0.55)]";
+  if (urgency === "soon") return "bg-amber-300 shadow-[0_0_6px_rgba(252,211,77,0.45)]";
+  return "bg-white/35";
 }
 
-function DueMarker({
-  urgency,
-  dueFrac,
-  pctStart,
-  barTop,
-  dimmed = false,
-}: {
-  urgency: Urgency;
-  dueFrac: number;
-  pctStart: number;
-  barTop: string;
-  dimmed?: boolean;
-}) {
-  const pos = `${Math.min(100, Math.max(dueFrac, pctStart))}%`;
-
-  return (
-    <span
-      aria-hidden
-      className={cn(
-        "pointer-events-none absolute z-[3] size-1.5 -translate-x-1/2 rounded-full sm:size-2",
-        dueMarkerClass(urgency),
-        dimmed && "opacity-30",
-      )}
-      style={{
-        left: pos,
-        top: barTop,
-      }}
-    />
-  );
-}
-
-/** Flat span bar for start→due on the shared timeline grid. */
-export function ThreadTimelineTrack({
-  timelineDays,
+/** Flowing thread strand positioned via shared scrollable canvas scale. */
+export function ThreadStrand({
+  canvasScale,
   todayISO,
-  preset,
   thread,
   dimmed,
   isSelectedToday = false,
-  laneHeightPx,
-  integratedBoard = false,
+  onActivate,
 }: {
-  timelineDays: readonly string[];
+  canvasScale: ScrollableTimelineScale;
   todayISO: string;
-  preset: TimelinePreset;
   thread: ThreadRow;
   dimmed: boolean;
   isSelectedToday?: boolean;
-  laneHeightPx?: number;
-  glow?: boolean;
-  /** Omit per-row mini-grid when the canvas draws one shared timeline grid underneath. */
-  integratedBoard?: boolean;
+  onActivate?: () => void;
 }) {
-  const rangeStartISO = timelineDays[0]!;
-  const rangeEndISO = timelineDays.at(-1)!;
-
   const span = clampThreadSpanToRange(
     thread.start_date,
     thread.due_date,
-    rangeStartISO,
-    rangeEndISO,
+    canvasScale.canvasStartISO,
+    canvasScale.canvasEndISO,
   );
 
-  if (!span) return null;
+  if (!span || canvasScale.canvasWidthPx <= 0) return null;
 
-  const { pctStart, pctWidth, dueFrac } = timelineBarMetrics(
+  const { leftPx, widthPx, duePx } = getThreadSpanPxOnCanvas(
     span.visibleStartISO,
     span.visibleDueISO,
-    timelineDays,
+    canvasScale,
   );
 
   const urgency = urgencyForDueDate(thread.due_date, todayISO);
   const isPaused = thread.status === "paused";
-
   const c = thread.color;
-  const opacity = dimmed ? 0.26 : isPaused ? 0.5 : isSelectedToday ? 1 : 0.78;
 
-  const percentLayout = threadBarLayoutPercent();
-  const pixelLayout = laneHeightPx ? threadBarLayout(laneHeightPx) : null;
-  const barTop = pixelLayout ? `${pixelLayout.barTopPx}px` : percentLayout.barTop;
-  const barHeight = pixelLayout ? `${pixelLayout.barHPx}px` : percentLayout.barHeight;
+  const opacity = dimmed ? 0.22 : isPaused ? 0.45 : isSelectedToday ? 1 : 0.82;
+  const strandH = isSelectedToday && !dimmed ? 9 : 7;
 
-  const barStyle: CSSProperties = {
-    left: `${pctStart}%`,
-    width: `${Math.max(pctWidth, (1 / timelineDays.length) * 100)}%`,
-    top: barTop,
-    height: barHeight,
-    minHeight: dimmed ? 2 : isSelectedToday ? 3 : 2,
+  const strandStyle: CSSProperties = {
+    left: leftPx,
+    width: widthPx,
+    height: strandH,
     opacity,
-    backgroundColor: c,
+    background: `linear-gradient(90deg, ${c}00 0%, ${c}cc 8%, ${c} 50%, ${c}cc 92%, ${c}00 100%)`,
     boxShadow:
-      isSelectedToday && !dimmed ? `0 0 10px ${c}55` : undefined,
+      isSelectedToday && !dimmed ?
+        `0 0 18px ${c}55, 0 0 4px ${c}88 inset, 0 1px 0 rgb(255 255 255 / 0.12) inset`
+      : `0 0 10px ${c}33, 0 0 2px ${c}44 inset`,
   };
 
   return (
-    <div className="relative h-full min-h-0 w-full" aria-hidden>
-      {integratedBoard ? null : (
-        <div
-          className={cn(
-            "absolute inset-x-0 grid rounded-md border border-white/[0.06] bg-muted/20",
-            preset === "year" ? "top-[18px] bottom-[18px]" : "top-[20px] bottom-[20px]",
-          )}
-          style={{ ...timelineGridTemplateCols(timelineDays.length, preset), display: "grid" }}
-        >
-          {timelineDays.map((d) => (
-            <div
-              key={d}
-              className={cn(
-                "relative min-w-0 border-l border-white/[0.04] first:border-l-0",
-                d === todayISO && "bg-white/[0.025]",
-                preset === "year" && Number(d.slice(8, 10)) === 1 && "border-l-white/[0.08]",
-              )}
-            />
-          ))}
-        </div>
-      )}
-
-      <div
+    <div className="relative h-full w-full" aria-hidden={!onActivate}>
+      <button
+        type="button"
+        aria-label={`Open ${thread.name}`}
+        onClick={onActivate}
         className={cn(
-          "pointer-events-none absolute z-[2] rounded-full",
-          isPaused && "outline outline-dashed outline-1 outline-offset-2 outline-white/20",
+          "group/strand absolute top-1/2 -translate-y-1/2 cursor-pointer outline-none",
+          "rounded-full transition-[height,box-shadow,opacity] duration-200",
+          isPaused && "opacity-60",
+          "focus-visible:ring-2 focus-visible:ring-violet-400/50 focus-visible:ring-offset-2 focus-visible:ring-offset-transparent",
         )}
-        style={barStyle}
-      />
+        style={strandStyle}
+      >
+        <span
+          aria-hidden
+          className="absolute top-1/2 left-0 size-2 -translate-x-1/2 -translate-y-1/2 rounded-full border border-white/20"
+          style={{ backgroundColor: c }}
+        />
+        <span
+          aria-hidden
+          className="absolute top-1/2 right-0 size-2 translate-x-1/2 -translate-y-1/2 rounded-full border border-white/20"
+          style={{ backgroundColor: c, opacity: 0.9 }}
+        />
+        <span
+          aria-hidden
+          className="absolute inset-x-2 top-1/2 h-px -translate-y-1/2 bg-white/25 opacity-0 transition-opacity group-hover/strand:opacity-100 group-focus-visible/strand:opacity-100"
+        />
+      </button>
 
-      <DueMarker
-        urgency={urgency}
-        dueFrac={dueFrac}
-        pctStart={pctStart}
-        barTop={barTop}
-        dimmed={dimmed}
+      <span
+        aria-hidden
+        className={cn(
+          "pointer-events-none absolute top-1/2 z-[2] size-2 -translate-x-1/2 -translate-y-1/2 rounded-full",
+          dueMarkerClass(urgency),
+          dimmed && "opacity-25",
+        )}
+        style={{ left: duePx }}
       />
     </div>
   );

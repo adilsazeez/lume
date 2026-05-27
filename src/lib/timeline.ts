@@ -1,4 +1,4 @@
-export type TimelinePreset = "day" | "year";
+export type TimelinePreset = "month" | "week" | "year";
 
 function utcIsoSlice(iso: string) {
   return iso.includes("T") ? iso.slice(0, 10) : iso;
@@ -33,9 +33,65 @@ export function enumerateIsoDaysInclusive(startISO: string, endISO: string): str
   return days;
 }
 
+/** Add whole calendar months, clamping day to the target month's length. */
+export function isoCalendarAddMonths(iso: string, deltaMonths: number) {
+  const s = utcIsoSlice(iso);
+  const y = Number(s.slice(0, 4));
+  const mo = Number(s.slice(5, 7));
+  const d = Number(s.slice(8, 10));
+
+  const target = new Date(Date.UTC(y, mo - 1 + deltaMonths, 1));
+  const ty = target.getUTCFullYear();
+  const tmo = target.getUTCMonth() + 1;
+  const lastDay = new Date(Date.UTC(ty, tmo, 0)).getUTCDate();
+  const day = Math.min(d, lastDay);
+
+  return `${ty}-${String(tmo).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+}
+
+/** Canonical anchor (period start) for a reference date in the given preset. */
+export function periodAnchorISO(referenceISO: string, preset: TimelinePreset) {
+  const ref = utcIsoSlice(referenceISO);
+  if (preset === "month") return calendarMonthBounds(ref).startISO;
+  if (preset === "week") return calendarWeekBounds(ref).startISO;
+  return calendarYearBounds(ref).startISO;
+}
+
+/** Shift a period anchor by whole periods (weeks, months, or years). */
+export function shiftPeriodAnchor(
+  preset: TimelinePreset,
+  anchorISO: string,
+  deltaPeriods: number,
+) {
+  const anchor = periodAnchorISO(anchorISO, preset);
+  if (preset === "week") return isoCalendarAdd(anchor, deltaPeriods * 7);
+  if (preset === "month") return isoCalendarAddMonths(anchor, deltaPeriods);
+  const y = Number(anchor.slice(0, 4)) + deltaPeriods;
+  return `${y}-01-01`;
+}
+
 function calendarYearBounds(referenceISO: string) {
   const y = Number(utcIsoSlice(referenceISO).slice(0, 4));
   return { startISO: `${y}-01-01`, endISO: `${y}-12-31` };
+}
+
+function calendarMonthBounds(referenceISO: string) {
+  const s = utcIsoSlice(referenceISO);
+  const y = Number(s.slice(0, 4));
+  const mo = Number(s.slice(5, 7));
+  const startISO = `${y}-${String(mo).padStart(2, "0")}-01`;
+  const lastDay = new Date(Date.UTC(y, mo, 0)).getUTCDate();
+  const endISO = `${y}-${String(mo).padStart(2, "0")}-${String(lastDay).padStart(2, "0")}`;
+  return { startISO, endISO };
+}
+
+function calendarWeekBounds(referenceISO: string) {
+  const ref = utcIsoSlice(referenceISO);
+  const dow = utcDay(ref).getUTCDay();
+  const mondayOffset = dow === 0 ? -6 : 1 - dow;
+  const startISO = isoCalendarAdd(ref, mondayOffset);
+  const endISO = isoCalendarAdd(startISO, 6);
+  return { startISO, endISO };
 }
 
 export function getTimelineRange(referenceISO: string, preset: TimelinePreset) {
@@ -43,9 +99,10 @@ export function getTimelineRange(referenceISO: string, preset: TimelinePreset) {
   let startISO = ref;
   let endISO = ref;
 
-  if (preset === "day") {
-    startISO = isoCalendarAdd(ref, -90);
-    endISO = isoCalendarAdd(ref, 90);
+  if (preset === "month") {
+    ({ startISO, endISO } = calendarMonthBounds(ref));
+  } else if (preset === "week") {
+    ({ startISO, endISO } = calendarWeekBounds(ref));
   } else {
     ({ startISO, endISO } = calendarYearBounds(ref));
   }
@@ -74,7 +131,7 @@ export function diffUtcIsoDays(leftISO: string, rightISO: string) {
 
 /** @deprecated Prefer getTimelineRange with explicit preset */
 export function getTimelineWindow(referenceISO: string) {
-  return getTimelineRange(referenceISO, "day");
+  return getTimelineRange(referenceISO, "month");
 }
 
 export function clampThreadSpanToRange(
