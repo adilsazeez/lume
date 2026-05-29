@@ -20,9 +20,10 @@ import { Textarea } from "@/components/ui/textarea";
 
 import { NEON_THREAD_SWATCHES } from "@/lib/neon-presets";
 import { isoCalendarAdd } from "@/lib/timeline";
+import { THREAD_STATUS_OPTIONS, isNotStartedStatus, threadStatusLabel } from "@/lib/thread-status";
 import { cn } from "@/lib/utils";
 
-const STATUS_ITEMS: ThreadStatus[] = ["active", "paused", "completed", "archived"];
+const STATUS_ITEMS = THREAD_STATUS_OPTIONS;
 
 type DurationPreset = "week" | "month" | "3month";
 
@@ -64,7 +65,7 @@ function DurationPresetSwitcher({
   return (
     <div
       aria-label="Thread duration"
-      className="inline-flex rounded-md border border-white/[0.08] p-0.5"
+      className="inline-flex rounded-md border border-lume-border-strong p-0.5"
       role="group"
     >
       {DURATION_PRESETS.map(({ key, label }) => (
@@ -107,8 +108,8 @@ export function ThreadFormDialog({
     description: string | null;
     category_id: string | null;
     color: string;
-    start_date: string;
-    due_date: string;
+    start_date: string | null;
+    due_date: string | null;
     status: ThreadStatus;
   }) => Promise<void>;
 }) {
@@ -128,6 +129,16 @@ export function ThreadFormDialog({
   );
   const [status, setStatus] = React.useState<ThreadStatus>(() => editing?.status ?? "active");
 
+  const isNotStarted = isNotStartedStatus(status);
+
+  function handleStatusChange(next: ThreadStatus) {
+    if (isNotStartedStatus(status) && !isNotStartedStatus(next)) {
+      setStartDate(localTodayISO);
+      setDueDate(dueFromStart(localTodayISO, durationPreset));
+    }
+    setStatus(next);
+  }
+
   function applyDurationPreset(preset: DurationPreset, anchorStart = startDate) {
     setDurationPreset(preset);
     setDueDate(dueFromStart(anchorStart, preset));
@@ -138,7 +149,7 @@ export function ThreadFormDialog({
 
     if (!name.trim() || busy) return;
 
-    if (dueDate.localeCompare(startDate) < 0) {
+    if (!isNotStarted && dueDate.localeCompare(startDate) < 0) {
       alert("Due anchor must stay on/beyond the start date.");
       return;
     }
@@ -149,8 +160,8 @@ export function ThreadFormDialog({
       description: description.trim().length ? description.trim() : null,
       category_id: categoryId ? categoryId : null,
       color,
-      start_date: startDate,
-      due_date: dueDate,
+      start_date: isNotStarted ? null : startDate,
+      due_date: isNotStarted ? null : dueDate,
       status,
     });
 
@@ -219,7 +230,7 @@ export function ThreadFormDialog({
                       className={cn(
                         "size-[28px] rounded-full border-[1px] outline-none transition-opacity",
                         color === hex
-                          ? "ring-2 ring-violet-500/28 ring-offset-2 ring-offset-background"
+                          ? "ring-2 ring-lume-focus ring-offset-2 ring-offset-background"
                           : "border-white/32 opacity-94 hover:opacity-100",
                       )}
                       onClick={() => setColor(hex)}
@@ -269,71 +280,75 @@ export function ThreadFormDialog({
                   id="lume-thread-status"
                   value={status}
                   disabled={busy}
-                  onChange={(e) =>
-                    setStatus(e.target.value as ThreadStatus)}
+                  onChange={(e) => handleStatusChange(e.target.value as ThreadStatus)}
                   aria-label="Thread status"
-                  className={cn(selectFieldClass, "lowercase")}
+                  className={cn(selectFieldClass)}
                 >
                   {STATUS_ITEMS.map((state) => (
                     <option key={state} value={state}>
-                      {state.charAt(0).toUpperCase()}
-                      {state.slice(1)}
+                      {threadStatusLabel(state)}
                     </option>
                   ))}
                 </select>
               </div>
             </div>
 
-            <div className="grid gap-[16px] sm:grid-cols-12">
-              {!isEditing ?
-                <div className="space-y-2 sm:col-span-12">
-                  <Label className="text-[13px]">Duration</Label>
-                  <DurationPresetSwitcher
-                    value={durationPreset}
-                    disabled={busy}
-                    onChange={(preset) => applyDurationPreset(preset)}
-                  />
-                </div>
-              : null}
+            {!isNotStarted ?
+              <div className="grid gap-[16px] sm:grid-cols-12">
+                {!isEditing ?
+                  <div className="space-y-2 sm:col-span-12">
+                    <Label className="text-[13px]">Duration</Label>
+                    <DurationPresetSwitcher
+                      value={durationPreset}
+                      disabled={busy}
+                      onChange={(preset) => applyDurationPreset(preset)}
+                    />
+                  </div>
+                : null}
 
-              <div className="grid gap-[10px] sm:col-span-6 md:grid-cols-2">
-                <div className="space-y-[9px]">
-                  <Label className="text-[13px]" htmlFor="lume-thread-start">
-                    Start anchor
-                  </Label>
-                  <Input
-                    type="date"
-                    id="lume-thread-start"
-                    required
-                    value={startDate}
-                    disabled={busy}
-                    onChange={(e) => {
-                      const next = e.target.value;
-                      setStartDate(next);
+                <div className="grid gap-[10px] sm:col-span-6 md:grid-cols-2">
+                  <div className="space-y-[9px]">
+                    <Label className="text-[13px]" htmlFor="lume-thread-start">
+                      Start anchor
+                    </Label>
+                    <Input
+                      type="date"
+                      id="lume-thread-start"
+                      required
+                      value={startDate}
+                      disabled={busy}
+                      onChange={(e) => {
+                        const next = e.target.value;
+                        setStartDate(next);
 
-                      if (!isEditing) {
-                        setDueDate(dueFromStart(next, durationPreset));
-                      }
-                    }}
-                    className="border-white/41 bg-muted/78 text-[13px]"
-                  />
-                </div>
-                <div className="space-y-[11px]">
-                  <Label className="text-[13px]" htmlFor="lume-thread-due">
-                    Due horizon
-                  </Label>
-                  <Input
-                    type="date"
-                    id="lume-thread-due"
-                    required
-                    value={dueDate}
-                    disabled={busy}
-                    onChange={(e) => setDueDate(e.target.value)}
-                    className="border-white/45 bg-muted/78 text-[13px]"
-                  />
+                        if (!isEditing) {
+                          setDueDate(dueFromStart(next, durationPreset));
+                        }
+                      }}
+                      className="border-white/41 bg-muted/78 text-[13px]"
+                    />
+                  </div>
+                  <div className="space-y-[11px]">
+                    <Label className="text-[13px]" htmlFor="lume-thread-due">
+                      Due horizon
+                    </Label>
+                    <Input
+                      type="date"
+                      id="lume-thread-due"
+                      required
+                      value={dueDate}
+                      disabled={busy}
+                      onChange={(e) => setDueDate(e.target.value)}
+                      className="border-white/45 bg-muted/78 text-[13px]"
+                    />
+                  </div>
                 </div>
               </div>
-            </div>
+            : (
+              <p className="text-[12px] leading-snug text-muted-foreground">
+                Start and due dates unlock when you move this thread out of Not started.
+              </p>
+            )}
           </div>
 
           <DialogFooter className="flex flex-row flex-wrap-reverse items-center gap-[13px] sm:justify-end">
@@ -352,11 +367,7 @@ export function ThreadFormDialog({
                 "w-[max(148px,min(228px,_44vw))] bg-primary text-[14px]",
               )}
               type="submit"
-              disabled={
-                Boolean(
-                  busy || !name.trim() || startDate.trim().length < 10 || dueDate.trim().length < 10,
-                )
-              }
+              disabled={Boolean(busy || !name.trim())}
             >
               {(editing ?? null) ? "Save thread" : "Create thread"}
             </Button>

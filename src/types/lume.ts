@@ -1,4 +1,4 @@
-export type ThreadStatus = "active" | "paused" | "completed" | "archived";
+export type ThreadStatus = "not_started" | "active" | "paused" | "completed" | "archived";
 
 export type CategoryRow = {
   id: string;
@@ -19,16 +19,6 @@ export type ThreadRow = {
   created_at: string;
   updated_at: string;
   category?: CategoryRow | null;
-  subthreads?: SubthreadRow[];
-};
-
-export type SubthreadRow = {
-  id: string;
-  thread_id: string;
-  name: string;
-  done: boolean;
-  sort_order: number;
-  created_at: string;
 };
 
 export type DailyLogRow = {
@@ -75,4 +65,6 @@ export type DashboardPayload = {
   todayLogs: DailyLogRow[];
   miniTasks: MiniTaskRow[];
   serverTodayISO: string;
+  /** IANA timezone used for calendar-day boundaries (rollover polling). */
+  dateTimezone: string;
 };

@@ -62,7 +62,7 @@ function CategoryEditorRow({
   }
 
   return (
-    <div className="flex flex-wrap items-center gap-3 rounded-xl border border-white/[0.09] bg-card/76 px-3 py-2 text-[13px]">
+    <div className="flex flex-wrap items-center gap-3 rounded-xl border border-lume-border-strong bg-card px-3 py-2 text-[13px]">
       <span
         className="h-10 w-10 shrink-0 rounded-full border border-white/26"
         style={{ backgroundColor: category.color }}
@@ -205,7 +205,7 @@ export function CategoryManagerDialog({
 
           <form
             onSubmit={(evt) => void submitCreate(evt)}
-            className="space-y-5 rounded-xl border border-white/[0.12] bg-muted/55 p-[18px]"
+            className="space-y-5 rounded-xl border border-lume-border-strong bg-lume-surface p-[18px]"
           >
           <div className="space-y-2">
             <Label className="" htmlFor="cat-label">
@@ -236,9 +236,9 @@ export function CategoryManagerDialog({
                   disabled={busy}
                   title={hex}
                   className={cn(
-                    "h-10 w-10 rounded-full border border-white/[0.08]",
+                    "h-10 w-10 rounded-full border border-lume-border",
                     hex === hue ?
-                      "ring-2 ring-violet-500/32 ring-offset-2 ring-offset-background"
+                      "ring-2 ring-lume-focus ring-offset-2 ring-offset-background"
                     : "opacity-[0.93] hover:opacity-100",
                   )}
                   style={{ backgroundColor: hex }}
@@ -256,7 +256,7 @@ export function CategoryManagerDialog({
           </form>
         </div>
 
-        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain border-t border-white/[0.08] px-6 py-4 [-webkit-overflow-scrolling:touch]">
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain border-t border-lume-border-strong px-6 py-4 [-webkit-overflow-scrolling:touch]">
           <div className="space-y-3">
             {sorted.map((category) => (
               <CategoryEditorRow

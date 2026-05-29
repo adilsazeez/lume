@@ -302,6 +302,17 @@ export function scrollLeftForDate(iso: string, canvas: ScrollableTimelineScale) 
   return Math.max(0, x - canvas.viewportWidthPx / 2);
 }
 
+/** Scroll offset to place a date near the left edge of the viewport track. */
+export function scrollLeftForDateAtTrackStart(
+  iso: string,
+  canvas: ScrollableTimelineScale,
+  insetPx = 16,
+) {
+  const x = getXOnCanvas(iso, canvas);
+  const maxScroll = Math.max(0, canvas.canvasWidthPx - canvas.viewportWidthPx);
+  return Math.min(maxScroll, Math.max(0, x - insetPx));
+}
+
 export function buildScrollableTimelineScale(
   preset: TimelinePreset,
   focusISO: string,

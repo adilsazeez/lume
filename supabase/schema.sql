@@ -18,7 +18,7 @@ create table if not exists threads (
   color text not null default '#5c6f86',
   start_date date not null,
   due_date date not null,
-  status text not null default 'active' check (status in ('active','paused','completed','archived')),
+  status text not null default 'active' check (status in ('not_started','active','paused','completed','archived')),
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
   constraint threads_due_on_or_after_start check (due_date >= start_date)
@@ -26,18 +26,6 @@ create table if not exists threads (
 
 create index if not exists threads_category_id_idx on threads(category_id);
 create index if not exists threads_status_idx on threads(status);
-
--- Subthreads nested under threads (no separate timeline span)
-create table if not exists subthreads (
-  id uuid primary key default gen_random_uuid(),
-  thread_id uuid not null references threads(id) on delete cascade,
-  name text not null,
-  done boolean not null default false,
-  sort_order int not null default 0,
-  created_at timestamptz not null default now()
-);
-
-create index if not exists subthreads_thread_id_idx on subthreads(thread_id);
 
 -- Optional per-day reflections for a thread
 create table if not exists daily_logs (
@@ -110,7 +98,6 @@ for each row execute function public.set_updated_at();
 -- Local single-user MVP: permissive anon access via RLS
 alter table categories enable row level security;
 alter table threads enable row level security;
-alter table subthreads enable row level security;
 alter table daily_logs enable row level security;
 alter table today_selections enable row level security;
 alter table mini_tasks enable row level security;
@@ -122,10 +109,6 @@ create policy categories_public_all
 drop policy if exists threads_public_all on threads;
 create policy threads_public_all
   on threads for all using (true) with check (true);
-
-drop policy if exists subthreads_public_all on subthreads;
-create policy subthreads_public_all
-  on subthreads for all using (true) with check (true);
 
 drop policy if exists daily_logs_public_all on daily_logs;
 create policy daily_logs_public_all

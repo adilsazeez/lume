@@ -30,7 +30,7 @@ export function ThreadInlineAddTaskButton({
       className={cn(
         "shrink-0 text-muted-foreground/55",
         "opacity-60 hover:opacity-100",
-        "hover:bg-white/[0.06] hover:text-foreground",
+        "hover:bg-lume-hover hover:text-foreground",
       )}
     >
       <Plus aria-hidden className="size-3" />

@@ -9,12 +9,12 @@ import { clampThreadSpanToRange, urgencyForDueDate, type Urgency } from "@/lib/t
 import { cn } from "@/lib/utils";
 import type { ThreadRow } from "@/types/lume";
 
-export const CANVAS_LABEL_W_MIN = 140;
-export const CANVAS_LABEL_W_DEFAULT = 192;
-export const CANVAS_LABEL_W_MAX = 280;
+export const CANVAS_LABEL_W_MIN = 168;
+export const CANVAS_LABEL_W_DEFAULT = 248;
+export const CANVAS_LABEL_W_MAX = 360;
 /** @deprecated Use CANVAS_LABEL_W_DEFAULT or dynamic label width from useCanvasLabelWidth */
 export const CANVAS_LABEL_W = CANVAS_LABEL_W_DEFAULT;
-export const CANVAS_LANE_PITCH = 64;
+export const CANVAS_LANE_PITCH = 72;
 export const CANVAS_RULER_H = 52;
 
 export type TimelineThreadView = {
@@ -63,22 +63,23 @@ export function ThreadStrand({
   );
 
   const urgency = urgencyForDueDate(thread.due_date, todayISO);
+  const isNotStarted = thread.status === "not_started";
   const isPaused = thread.status === "paused";
   const c = thread.color;
 
-  const opacity = dimmed ? 0.22 : isPaused ? 0.45 : isSelectedToday ? 1 : 0.82;
-  const strandH = isSelectedToday && !dimmed ? 9 : 7;
+  const opacity = dimmed ? 0.34 : isNotStarted ? 0.4 : isPaused ? 0.52 : isSelectedToday ? 1 : 0.94;
+  const strandH = isSelectedToday && !dimmed ? 10 : 8;
 
   const strandStyle: CSSProperties = {
     left: leftPx,
     width: widthPx,
     height: strandH,
     opacity,
-    background: `linear-gradient(90deg, ${c}00 0%, ${c}cc 8%, ${c} 50%, ${c}cc 92%, ${c}00 100%)`,
+    background: `linear-gradient(90deg, ${c}00 0%, ${c}e6 6%, ${c} 50%, ${c}e6 94%, ${c}00 100%)`,
     boxShadow:
       isSelectedToday && !dimmed ?
-        `0 0 18px ${c}55, 0 0 4px ${c}88 inset, 0 1px 0 rgb(255 255 255 / 0.12) inset`
-      : `0 0 10px ${c}33, 0 0 2px ${c}44 inset`,
+        `0 0 20px ${c}66, 0 0 6px ${c}99 inset, 0 1px 0 rgb(255 255 255 / 0.14) inset`
+      : `0 0 14px ${c}44, 0 0 3px ${c}55 inset`,
   };
 
   return (
@@ -90,8 +91,9 @@ export function ThreadStrand({
         className={cn(
           "group/strand absolute top-1/2 -translate-y-1/2 cursor-pointer outline-none",
           "rounded-full transition-[height,box-shadow,opacity] duration-200",
+          isNotStarted && "opacity-50",
           isPaused && "opacity-60",
-          "focus-visible:ring-2 focus-visible:ring-violet-400/50 focus-visible:ring-offset-2 focus-visible:ring-offset-transparent",
+          "focus-visible:ring-2 focus-visible:ring-lume-focus focus-visible:ring-offset-2 focus-visible:ring-offset-lume-canvas",
         )}
         style={strandStyle}
       >

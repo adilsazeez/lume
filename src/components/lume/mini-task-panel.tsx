@@ -1,21 +1,21 @@
 "use client";
 
 import * as React from "react";
-import { ChevronDown, ChevronRight } from "lucide-react";
 
 import type { MiniTaskFilter, MiniTaskPriority, MiniTaskRow, MiniTaskStatus, ThreadRow } from "@/types/lume";
 
 import { MiniTaskList } from "@/components/lume/mini-task-list";
 import { QuickAddMiniTask } from "@/components/lume/quick-add-mini-task";
-import { Button } from "@/components/ui/button";
 
 import { filterMiniTasks, sortMiniTasks } from "@/lib/mini-tasks";
+import { showsOnTimeline } from "@/lib/thread-status";
 import { cn } from "@/lib/utils";
 
 const FILTERS: { key: MiniTaskFilter; label: string }[] = [
   { key: "all", label: "All" },
   { key: "today", label: "Today" },
   { key: "upcoming", label: "Upcoming" },
+  { key: "done", label: "Completed" },
 ];
 
 export function MiniTaskPanel({
@@ -44,7 +44,6 @@ export function MiniTaskPanel({
   onQuickAdd: (payload: { thread_id: string; title: string }) => Promise<void> | void;
 }) {
   const [filter, setFilter] = React.useState<MiniTaskFilter>("today");
-  const [showDone, setShowDone] = React.useState(false);
   const [expandedTaskId, setExpandedTaskId] = React.useState<string | null>(null);
   const listRef = React.useRef<HTMLDivElement>(null);
 
@@ -67,27 +66,32 @@ export function MiniTaskPanel({
     return () => document.removeEventListener("pointerdown", onPointerDown);
   }, []);
 
-  React.useEffect(() => {
-    if (expandedTaskId && !tasks.some((t) => t.id === expandedTaskId)) {
-      setExpandedTaskId(null);
-    }
-  }, [tasks, expandedTaskId]);
-
   const activeThreads = React.useMemo(
-    () => threads.filter((t) => t.status === "active" || t.status === "paused"),
+    () => threads.filter((t) => showsOnTimeline(t.status)),
     [threads],
   );
 
   const visibleTasks = React.useMemo(() => {
     const filtered = filterMiniTasks(tasks, filter, todayISO);
+    if (filter === "done") {
+      return filtered.slice().sort((a, b) => {
+        const ac = a.completed_at ?? a.updated_at;
+        const bc = b.completed_at ?? b.updated_at;
+        return bc.localeCompare(ac);
+      });
+    }
     return sortMiniTasks(filtered, todayISO);
   }, [tasks, filter, todayISO]);
 
-  const doneTasks = React.useMemo(() => {
-    return sortMiniTasks(filterMiniTasks(tasks, "done", todayISO), todayISO);
-  }, [tasks, todayISO]);
+  React.useEffect(() => {
+    if (expandedTaskId && !visibleTasks.some((t) => t.id === expandedTaskId)) {
+      setExpandedTaskId(null);
+    }
+  }, [visibleTasks, expandedTaskId]);
 
   const openCount = tasks.filter((t) => t.status !== "done").length;
+  const doneCount = tasks.filter((t) => t.status === "done").length;
+  const isCompletedTab = filter === "done";
 
   const emptyLabels: Record<MiniTaskFilter, string> = {
     all: "No open tasks. Capture ad hoc actions here.",
@@ -101,24 +105,31 @@ export function MiniTaskPanel({
       aria-label="Mini-tasks"
       className={cn(
         "flex min-h-0 w-[clamp(15rem,22vw,18rem)] shrink-0 flex-col overflow-hidden",
-        "rounded-md border border-white/[0.08] bg-muted/10",
+        "rounded-md border border-lume-border-strong bg-lume-panel",
       )}
     >
-      <div className="shrink-0 border-b border-white/[0.08] bg-background/95 px-3 py-2">
+      <div className="shrink-0 border-b border-lume-border-strong bg-lume-panel/95 px-3 py-2">
         <div className="flex items-center justify-between gap-2">
           <div>
-            <h2 className="text-[11px] font-medium tracking-[0.08em] text-foreground/90 uppercase">Tasks</h2>
-            <p className="text-[10px] text-muted-foreground/65">Short actions inside threads</p>
+            <h2 className="text-[11px] font-medium tracking-[0.08em] text-foreground uppercase">Tasks</h2>
+            <p className="text-[10px] text-lume-text-muted">Short actions inside threads</p>
           </div>
-          <span className="text-[10px] tabular-nums text-muted-foreground">
-            <span className="font-medium text-foreground/80">{openCount}</span> open
+          <span className="text-[10px] tabular-nums text-lume-text-secondary">
+            {isCompletedTab ?
+              <>
+                <span className="font-medium text-foreground">{doneCount}</span> completed
+              </>
+            : <>
+                <span className="font-medium text-foreground">{openCount}</span> open
+              </>
+            }
           </span>
         </div>
 
         <div
           role="tablist"
           aria-label="Task filters"
-          className="mt-2 inline-flex rounded-md border border-white/[0.08] p-0.5"
+          className="mt-2 flex flex-wrap gap-0.5 rounded-md border border-lume-border-strong p-0.5"
         >
           {FILTERS.map(({ key, label }) => (
             <button
@@ -130,8 +141,8 @@ export function MiniTaskPanel({
               className={cn(
                 "rounded px-2 py-0.5 text-[10px] font-medium",
                 filter === key ?
-                  "bg-muted text-foreground"
-                : "text-muted-foreground hover:text-foreground",
+                  "bg-lume-surface text-foreground"
+                : "text-lume-text-muted hover:text-foreground",
               )}
             >
               {label}
@@ -140,7 +151,9 @@ export function MiniTaskPanel({
         </div>
       </div>
 
-      <QuickAddMiniTask threads={activeThreads} busy={busy} onSubmit={onQuickAdd} />
+      {isCompletedTab ? null : (
+        <QuickAddMiniTask threads={activeThreads} busy={busy} onSubmit={onQuickAdd} />
+      )}
 
       <div ref={listRef} className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain px-1.5 py-2 scrollbar-y-hover">
         <MiniTaskList
@@ -157,42 +170,6 @@ export function MiniTaskPanel({
           onDelete={onDelete}
           emptyLabel={emptyLabels[filter]}
         />
-
-        {doneTasks.length > 0 ?
-          <div className="mt-3 border-t border-white/[0.06] pt-2">
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              onClick={() => setShowDone((v) => !v)}
-              className="h-7 w-full justify-start gap-1.5 px-2 text-[10px] text-muted-foreground"
-            >
-              {showDone ?
-                <ChevronDown aria-hidden className="size-3" />
-              : <ChevronRight aria-hidden className="size-3" />}
-              Done
-              <span className="tabular-nums text-muted-foreground/70">({doneTasks.length})</span>
-            </Button>
-
-            {showDone ?
-              <div className="mt-1">
-                <MiniTaskList
-                  tasks={doneTasks}
-                  todayISO={todayISO}
-                  busy={busy}
-                  expandedTaskId={expandedTaskId}
-                  onExpandTask={setExpandedTaskId}
-                  onStatusChange={onStatusChange}
-                  onTitleChange={onTitleChange}
-                  onNoteChange={onNoteChange}
-                  onDueDateChange={onDueDateChange}
-                  onPriorityChange={onPriorityChange}
-                  onDelete={onDelete}
-                />
-              </div>
-            : null}
-          </div>
-        : null}
       </div>
     </aside>
   );

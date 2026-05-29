@@ -97,7 +97,7 @@ export function CreateMiniTaskDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-h-[calc(100dvh-4rem)] max-w-md gap-0 overflow-auto border-white/10 bg-background p-0 sm:max-w-md">
         <form onSubmit={(e) => void handleSubmit(e)}>
-          <DialogHeader className="gap-1 border-b border-white/[0.08] px-5 py-4 pr-12">
+          <DialogHeader className="gap-1 border-b border-lume-border-strong px-5 py-4 pr-12">
             <DialogTitle className="text-[15px] font-medium">
               {lockedThread ? `Task · ${lockedThread.name}` : "New mini-task"}
             </DialogTitle>
@@ -223,7 +223,7 @@ export function CreateMiniTaskDialog({
             )}
           </div>
 
-          <DialogFooter className="!m-0 gap-2 border-t border-white/[0.08] bg-transparent px-5 py-3 sm:flex-row sm:justify-end">
+          <DialogFooter className="!m-0 gap-2 border-t border-lume-border-strong bg-transparent px-5 py-3 sm:flex-row sm:justify-end">
             <Button type="button" variant="ghost" size="sm" disabled={busy} onClick={() => onOpenChange(false)}>
               Cancel
             </Button>

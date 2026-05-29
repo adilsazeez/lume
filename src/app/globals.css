@@ -7,7 +7,6 @@
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  /* Geist from next/font (--font-geist-sans); explicit sans stack — no serif fallbacks */
   --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
   --font-mono: var(--font-geist-mono), ui-monospace, monospace;
   --font-heading: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
@@ -47,6 +46,30 @@
   --radius-2xl: calc(var(--radius) * 1.8);
   --radius-3xl: calc(var(--radius) * 2.2);
   --radius-4xl: calc(var(--radius) * 2.6);
+
+  /* Lume semantic surfaces */
+  --color-lume-app: var(--lume-app);
+  --color-lume-canvas: var(--lume-canvas);
+  --color-lume-canvas-bar: var(--lume-canvas-bar);
+  --color-lume-canvas-label: var(--lume-canvas-label);
+  --color-lume-panel: var(--lume-panel);
+  --color-lume-surface: var(--lume-surface);
+  --color-lume-surface-elevated: var(--lume-surface-elevated);
+  --color-lume-hover: var(--lume-hover);
+  --color-lume-border: var(--lume-border);
+  --color-lume-border-strong: var(--lume-border-strong);
+  --color-lume-grid: var(--lume-grid);
+  --color-lume-grid-strong: var(--lume-grid-strong);
+  --color-lume-text-secondary: var(--lume-text-secondary);
+  --color-lume-text-muted: var(--lume-text-muted);
+  --color-lume-accent: var(--lume-accent);
+  --color-lume-accent-soft: var(--lume-accent-soft);
+  --color-lume-today: var(--lume-today);
+  --color-lume-today-bg: var(--lume-today-bg);
+  --color-lume-today-line: var(--lume-today-line);
+  --color-lume-selection: var(--lume-selection);
+  --color-lume-focus: var(--lume-focus);
+  --color-lume-overlay: var(--lume-overlay);
 }
 
 :root {
@@ -85,37 +108,65 @@
 }
 
 .dark {
-  --background: oklch(0.19 0.016 258);
-  --foreground: oklch(0.985 0 0);
-  --card: oklch(0.205 0 0);
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.205 0 0);
-  --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.922 0 0);
-  --primary-foreground: oklch(0.205 0 0);
-  --secondary: oklch(0.269 0 0);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.269 0 0);
-  --muted-foreground: oklch(0.708 0 0);
-  --accent: oklch(0.269 0 0);
-  --accent-foreground: oklch(0.985 0 0);
-  --destructive: oklch(0.704 0.191 22.216);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.556 0 0);
-  --chart-1: oklch(0.87 0 0);
-  --chart-2: oklch(0.556 0 0);
-  --chart-3: oklch(0.439 0 0);
-  --chart-4: oklch(0.371 0 0);
-  --chart-5: oklch(0.269 0 0);
-  --sidebar: oklch(0.205 0 0);
-  --sidebar-foreground: oklch(0.985 0 0);
-  --sidebar-primary: oklch(0.488 0.243 264.376);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.269 0 0);
-  --sidebar-accent-foreground: oklch(0.985 0 0);
-  --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.556 0 0);
+  /*
+   * Layered charcoal / graphite dark — not pure black.
+   * App shell → canvas field → panels → elevated overlays.
+   */
+  --background: oklch(0.22 0.014 258);
+  --foreground: oklch(0.92 0.008 260);
+  --card: oklch(0.26 0.015 261);
+  --card-foreground: oklch(0.92 0.008 260);
+  --popover: oklch(0.28 0.016 262);
+  --popover-foreground: oklch(0.92 0.008 260);
+  --primary: oklch(0.78 0.1 285);
+  --primary-foreground: oklch(0.2 0.014 258);
+  --secondary: oklch(0.28 0.014 260);
+  --secondary-foreground: oklch(0.88 0.01 260);
+  --muted: oklch(0.26 0.012 259);
+  --muted-foreground: oklch(0.68 0.014 260);
+  --accent: oklch(0.3 0.018 285 / 55%);
+  --accent-foreground: oklch(0.92 0.008 260);
+  --destructive: oklch(0.65 0.18 25);
+  --border: oklch(0.42 0.012 260 / 38%);
+  --input: oklch(0.3 0.012 259 / 75%);
+  --ring: oklch(0.68 0.14 285 / 55%);
+  --chart-1: oklch(0.72 0.12 285);
+  --chart-2: oklch(0.7 0.1 220);
+  --chart-3: oklch(0.72 0.11 160);
+  --chart-4: oklch(0.74 0.12 50);
+  --chart-5: oklch(0.7 0.1 340);
+  --sidebar: oklch(0.24 0.014 259);
+  --sidebar-foreground: oklch(0.92 0.008 260);
+  --sidebar-primary: oklch(0.72 0.12 285);
+  --sidebar-primary-foreground: oklch(0.2 0.014 258);
+  --sidebar-accent: oklch(0.28 0.014 260);
+  --sidebar-accent-foreground: oklch(0.92 0.008 260);
+  --sidebar-border: oklch(0.42 0.012 260 / 38%);
+  --sidebar-ring: oklch(0.68 0.14 285 / 55%);
+
+  /* Lume semantic tokens */
+  --lume-app: oklch(0.22 0.014 258);
+  --lume-canvas: oklch(0.175 0.012 256);
+  --lume-canvas-bar: oklch(0.2 0.013 257);
+  --lume-canvas-label: oklch(0.185 0.012 256 / 94%);
+  --lume-panel: oklch(0.235 0.014 260);
+  --lume-surface: oklch(0.28 0.014 261 / 42%);
+  --lume-surface-elevated: oklch(0.29 0.016 262);
+  --lume-hover: oklch(0.38 0.014 261 / 16%);
+  --lume-border: oklch(0.44 0.012 260 / 26%);
+  --lume-border-strong: oklch(0.48 0.014 260 / 40%);
+  --lume-grid: oklch(0.5 0.012 260 / 18%);
+  --lume-grid-strong: oklch(0.52 0.014 260 / 30%);
+  --lume-text-secondary: oklch(0.78 0.012 260);
+  --lume-text-muted: oklch(0.62 0.014 260);
+  --lume-accent: oklch(0.74 0.12 285);
+  --lume-accent-soft: oklch(0.52 0.1 285 / 18%);
+  --lume-today: oklch(0.76 0.11 285);
+  --lume-today-bg: oklch(0.52 0.1 285 / 14%);
+  --lume-today-line: oklch(0.7 0.12 285 / 72%);
+  --lume-selection: oklch(0.52 0.11 285 / 24%);
+  --lume-focus: oklch(0.68 0.14 285 / 55%);
+  --lume-overlay: oklch(0.16 0.012 256 / 58%);
 }
 
 @layer base {
@@ -123,7 +174,6 @@
     @apply border-border outline-ring/50;
   }
   body {
-    /* Geist only — avoids any browser-default serif (e.g. Times) leakage */
     @apply bg-background text-foreground font-sans antialiased;
   }
 
@@ -154,7 +204,7 @@
 
   .scrollbar-y-hover:hover {
     scrollbar-width: thin;
-    scrollbar-color: rgb(255 255 255 / 0.18) transparent;
+    scrollbar-color: oklch(0.55 0.012 260 / 35%) transparent;
   }
 
   .scrollbar-y-hover:hover::-webkit-scrollbar {
@@ -164,10 +214,29 @@
 
   .scrollbar-y-hover:hover::-webkit-scrollbar-thumb {
     border-radius: 9999px;
-    background-color: rgb(255 255 255 / 0.18);
+    background-color: oklch(0.55 0.012 260 / 35%);
   }
 
   .scrollbar-y-hover:hover::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  .scrollbar-thin {
+    scrollbar-width: thin;
+    scrollbar-color: oklch(0.55 0.012 260 / 30%) transparent;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar-thumb {
+    border-radius: 9999px;
+    background-color: oklch(0.55 0.012 260 / 30%);
+  }
+
+  .scrollbar-thin::-webkit-scrollbar-track {
     background: transparent;
   }
 }

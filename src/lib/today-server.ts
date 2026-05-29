@@ -31,5 +31,10 @@ export function isoDateInTimeZone(reference: Date, timeZone: string): string {
 }
 
 export function getServerTodayISO(): string {
-  return isoDateInTimeZone(new Date(), getServerTimezone());
+  return getTodayISO(getServerTimezone());
+}
+
+/** Calendar today as `yyyy-MM-dd` in the given IANA timezone (client + server safe). */
+export function getTodayISO(timeZone: string, reference: Date = new Date()): string {
+  return isoDateInTimeZone(reference, timeZone);
 }

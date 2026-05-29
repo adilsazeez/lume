@@ -53,14 +53,14 @@ export function QuickAddMiniTask({
   };
 
   return (
-    <form onSubmit={(e) => void handleSubmit(e)} className="space-y-2 border-b border-white/[0.06] px-2.5 pb-3 pt-1">
+    <form onSubmit={(e) => void handleSubmit(e)} className="space-y-2 border-b border-lume-border px-2.5 pb-3 pt-1">
       <div className="flex gap-1.5">
         <Input
           value={title}
           disabled={busy || threads.length === 0}
           placeholder="Quick add task…"
           onChange={(e) => setTitle(e.target.value)}
-          className="h-8 flex-1 border-white/[0.08] bg-muted/20 text-[12px] placeholder:text-muted-foreground/45"
+          className="h-8 flex-1 border-lume-border-strong bg-lume-surface text-[12px] placeholder:text-lume-text-muted"
         />
         <Button
           type="submit"
@@ -82,7 +82,7 @@ export function QuickAddMiniTask({
         >
           <SelectTrigger
             className={cn(
-              "h-7 w-full border-white/[0.08] bg-transparent text-[10px] text-muted-foreground",
+              "h-7 w-full border-lume-border-strong bg-transparent text-[10px] text-lume-text-muted",
             )}
           >
             <SelectValue placeholder="Thread" />

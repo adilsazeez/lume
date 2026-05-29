@@ -15,13 +15,13 @@ function StatusIcon({ status }: { status: MiniTaskStatus }) {
     return <CheckCircle2 aria-hidden className="size-3.5 text-muted-foreground/50" />;
   }
   if (status === "in_progress") {
-    return <CircleDot aria-hidden className="size-3.5 text-violet-300/90" />;
+    return <CircleDot aria-hidden className="size-3.5 text-lume-accent" />;
   }
   return <Circle aria-hidden className="size-3.5 text-muted-foreground/55" />;
 }
 
 const prioritySelectClass =
-  "h-6 max-w-[5.5rem] rounded border border-white/10 bg-muted/20 px-1.5 text-[10px] text-muted-foreground outline-none focus-visible:ring-1 focus-visible:ring-violet-500/40";
+  "h-6 max-w-[5.5rem] rounded border border-lume-border bg-lume-surface px-1.5 text-[10px] text-lume-text-secondary outline-none focus-visible:ring-1 focus-visible:ring-lume-focus";
 
 export function MiniTaskItem({
   task,
@@ -111,8 +111,8 @@ export function MiniTaskItem({
       className={cn(
         "rounded-lg border transition-colors",
         isExpanded ?
-          "border-white/[0.1] bg-white/[0.04] shadow-[inset_0_1px_0_rgb(255_255_255/6%)]"
-        : "border-transparent hover:border-white/[0.06] hover:bg-white/[0.02]",
+          "border-lume-border-strong bg-lume-hover shadow-[inset_0_1px_0_var(--lume-border)]"
+        : "border-transparent hover:border-lume-border hover:bg-lume-hover/60",
         isDone && !isExpanded && "opacity-45",
         isDone && isExpanded && "opacity-80",
       )}
@@ -129,7 +129,7 @@ export function MiniTaskItem({
           }}
           className={cn(
             "mt-0.5 shrink-0 rounded p-0.5 outline-none",
-            "hover:bg-white/[0.06] focus-visible:ring-1 focus-visible:ring-violet-500/40",
+            "hover:bg-lume-hover focus-visible:ring-1 focus-visible:ring-lume-focus",
           )}
         >
           <StatusIcon status={task.status} />
@@ -146,8 +146,8 @@ export function MiniTaskItem({
                 onClick={() => closeExpanded(true)}
                 className={cn(
                   "absolute top-0 right-0 rounded p-0.5 text-muted-foreground/60 outline-none",
-                  "hover:bg-white/[0.06] hover:text-foreground",
-                  "focus-visible:ring-1 focus-visible:ring-violet-500/40",
+                  "hover:bg-lume-hover hover:text-foreground",
+                  "focus-visible:ring-1 focus-visible:ring-lume-focus",
                 )}
               >
                 <X aria-hidden className="size-3.5" />
@@ -259,7 +259,7 @@ export function MiniTaskItem({
               type="button"
               disabled={busy}
               onClick={handleRowClick}
-              className="block w-full text-left outline-none focus-visible:ring-1 focus-visible:ring-violet-500/40 rounded-sm"
+              className="block w-full text-left outline-none focus-visible:ring-1 focus-visible:ring-lume-focus rounded-sm"
             >
               <p
                 className={cn(

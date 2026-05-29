@@ -39,7 +39,7 @@ These are the kinds of threads Lume is built for — ongoing efforts with a star
 | Home renovation | Personal | Phases from planning through completion |
 | Race training | Health | Weekly sessions building toward event day |
 
-Each thread can have **subthreads** (checklist items), **daily logs** (short notes per day), and a **Today focus** pin so your morning scan stays calm.
+Each thread can have **daily logs** (short notes per day), **mini-tasks** in the side rail, and a **Today focus** pin so your morning scan stays calm.
 
 ## Stack
 

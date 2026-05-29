@@ -22,10 +22,10 @@ export function LumeTopRail({
   const setTodayFocusActive = useTodayFocusStore((s) => s.setTodayFocusActive);
 
   return (
-    <header className="z-30 shrink-0 border-b border-white/[0.08] bg-background/95 backdrop-blur-md">
+    <header className="z-30 shrink-0 border-b border-lume-border-strong bg-lume-app/95 backdrop-blur-md">
       <div className="flex h-11 items-center gap-3 px-4">
         <div className="flex min-w-0 items-center gap-2.5">
-          <h1 className="flex min-w-0 items-center gap-2 truncate text-[13px] font-medium tracking-[0.12em] text-foreground/90 uppercase">
+          <h1 className="flex min-w-0 items-center gap-2 truncate text-[13px] font-medium tracking-[0.12em] text-foreground uppercase">
             <img
               src="/lume-icon.svg"
               alt=""
@@ -35,7 +35,7 @@ export function LumeTopRail({
             Lume
           </h1>
           {todayCue ?
-            <span className="hidden text-[11px] tabular-nums text-muted-foreground/70 sm:inline">
+            <span className="hidden text-[11px] tabular-nums text-lume-text-secondary sm:inline">
               {todayCue}
             </span>
           : null}
@@ -43,7 +43,7 @@ export function LumeTopRail({
 
         <div className="ml-auto flex shrink-0 items-center gap-2">
           <label className="flex cursor-pointer items-center gap-1.5 pr-1">
-            <span className="text-[10px] font-medium tracking-wide text-muted-foreground/75 uppercase">
+            <span className="text-[10px] font-medium tracking-wide text-lume-text-muted uppercase">
               Focus
             </span>
             <Switch

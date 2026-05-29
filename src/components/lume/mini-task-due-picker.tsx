@@ -44,7 +44,7 @@ export function MiniTaskDuePicker({
         aria-label={dueDate ? `Due ${dueLabel}. Click to edit.` : "Add due date"}
         className={cn(
           "inline-flex items-center gap-0.5 rounded px-1 py-0.5 text-[10px] tabular-nums outline-none",
-          "hover:bg-white/[0.06] focus-visible:ring-1 focus-visible:ring-violet-500/40",
+          "hover:bg-lume-hover focus-visible:ring-1 focus-visible:ring-lume-focus",
           dueDate ?
             cn(
               urgency === "hot" && !isDone && "font-medium text-rose-300/90",
@@ -70,7 +70,7 @@ export function MiniTaskDuePicker({
               onClick={() => applyDue(isoCalendarAdd(todayISO, preset.days!))}
               className={cn(
                 "rounded-md px-2 py-1.5 text-[11px] text-foreground/90",
-                "hover:bg-white/[0.06] focus-visible:ring-1 focus-visible:ring-violet-500/40",
+                "hover:bg-lume-hover focus-visible:ring-1 focus-visible:ring-lume-focus",
                 dueDate === isoCalendarAdd(todayISO, preset.days!) && "bg-muted text-foreground",
               )}
             >
@@ -88,7 +88,7 @@ export function MiniTaskDuePicker({
               const v = e.target.value;
               applyDue(v || null);
             }}
-            className="h-8 w-full rounded-md border border-white/10 bg-muted/30 px-2 text-[12px] text-foreground outline-none focus-visible:ring-1 focus-visible:ring-violet-500/40"
+            className="h-8 w-full rounded-md border border-lume-border bg-lume-surface px-2 text-[12px] text-foreground outline-none focus-visible:ring-1 focus-visible:ring-lume-focus"
           />
         </label>
 
@@ -96,7 +96,7 @@ export function MiniTaskDuePicker({
           <button
             type="button"
             onClick={() => applyDue(null)}
-            className="w-full rounded-md px-2 py-1.5 text-left text-[11px] text-muted-foreground hover:bg-white/[0.06] hover:text-foreground"
+            className="w-full rounded-md px-2 py-1.5 text-left text-[11px] text-lume-text-muted hover:bg-lume-hover hover:text-foreground"
           >
             Clear due date
           </button>

@@ -1,21 +1,22 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
-import type { CategoryRow, DailyLogRow, DashboardPayload, MiniTaskRow, SubthreadRow, ThreadRow, TodaySelectionRow } from "@/types/lume";
+import type { CategoryRow, DailyLogRow, DashboardPayload, MiniTaskRow, ThreadRow, TodaySelectionRow } from "@/types/lume";
+import { showsOnTimeline } from "@/lib/thread-status";
+import { getServerTimezone } from "@/lib/today-server";
 
 async function hydratePayload(
   supabase: SupabaseClient,
   serverTodayISO: string,
+  dateTimezone: string,
 ): Promise<DashboardPayload> {
-  const [catRes, threadRes, subRes, miniTaskRes] = await Promise.all([
+  const [catRes, threadRes, miniTaskRes] = await Promise.all([
     supabase.from("categories").select("*").order("name", { ascending: true }),
     supabase.from("threads").select("*").order("due_date", { ascending: true }),
-    supabase.from("subthreads").select("*").order("sort_order", { ascending: true }),
     supabase.from("mini_tasks").select("*").order("created_at", { ascending: false }),
   ]);
 
   if (catRes.error) throw catRes.error;
   if (threadRes.error) throw threadRes.error;
-  if (subRes.error) throw subRes.error;
   if (miniTaskRes.error) throw miniTaskRes.error;
 
   const categoriesRows = ((catRes.data as CategoryRow[] | null) ?? []).slice();
@@ -23,14 +24,6 @@ async function hydratePayload(
   const categoriesById = new Map<string, CategoryRow>(
     categoriesRows.map((c) => [c.id, c]),
   );
-
-  const subsByThread = new Map<string, SubthreadRow[]>();
-
-  for (const s of (subRes.data as SubthreadRow[] | null) ?? []) {
-    const list = subsByThread.get(s.thread_id) ?? [];
-    list.push(s);
-    subsByThread.set(s.thread_id, list);
-  }
 
   const threadRows = (threadRes.data as ThreadRow[] | null) ?? [];
 
@@ -54,7 +47,6 @@ async function hydratePayload(
     ...t,
     category:
       t.category_id ? (categoriesById.get(t.category_id) ?? null) : null,
-    subthreads: subsByThread.get(t.id),
   });
 
   const allThreadsHydrated = threadRows
@@ -64,9 +56,7 @@ async function hydratePayload(
       return a.due_date.localeCompare(b.due_date);
     });
 
-  const timelineThreads = allThreadsHydrated.filter((t) =>
-    ["active", "paused"].includes(t.status),
-  );
+  const timelineThreads = allThreadsHydrated.filter((t) => showsOnTimeline(t.status));
 
   const timelineIds = [...new Set(timelineThreads.map((t) => t.id))];
 
@@ -103,12 +93,15 @@ async function hydratePayload(
     todayLogs,
     miniTasks,
     serverTodayISO,
+    dateTimezone,
   };
 }
 
 export async function hydrateDashboardPayload(
   supabase: SupabaseClient,
   serverTodayISO: string,
+  dateTimezone?: string,
 ): Promise<DashboardPayload> {
-  return hydratePayload(supabase, serverTodayISO);
+  const tz = dateTimezone ?? getServerTimezone();
+  return hydratePayload(supabase, serverTodayISO, tz);
 }

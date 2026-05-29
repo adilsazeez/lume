@@ -4,7 +4,7 @@ import * as React from "react";
 import { format } from "date-fns";
 import { Plus } from "lucide-react";
 
-import type { DashboardPayload, MiniTaskPriority, MiniTaskRow, MiniTaskStatus, ThreadRow, ThreadStatus } from "@/types/lume";
+import type { DashboardPayload, DailyLogRow, MiniTaskPriority, MiniTaskRow, MiniTaskStatus, ThreadRow, ThreadStatus } from "@/types/lume";
 
 import { Button } from "@/components/ui/button";
 import { CategoryManagerDialog } from "@/components/lume/category-manager-dialog";
@@ -18,8 +18,11 @@ import type { TimelineThreadView } from "@/components/lume/thread-timeline";
 
 import { hydrateDashboardPayload } from "@/lib/hydrate-dashboard";
 import { createBrowserSupabase } from "@/lib/supabase/browser";
+import { showsOnTimeline } from "@/lib/thread-status";
+import { getTodayISO } from "@/lib/today-server";
 
 import { useTodayFocusStore } from "@/stores/lume-store";
+import { useDayRolloverRefresh } from "@/hooks/use-day-rollover-refresh";
 
 function utcMiddayDate(iso: string) {
   return new Date(`${iso.split("T")[0]}T12:00:00.000Z`);
@@ -61,6 +64,7 @@ function DashboardBody({ initial }: { initial: DashboardPayload }) {
 
   const [detailId, setDetailId] = React.useState<string | null>(null);
   const [detailDraft, setDetailDraft] = React.useState("");
+  const [detailLogs, setDetailLogs] = React.useState<DailyLogRow[]>([]);
 
   const [miniTaskFormOpen, setMiniTaskFormOpen] = React.useState(false);
   const [miniTaskPresetThreadId, setMiniTaskPresetThreadId] = React.useState<string | null>(null);
@@ -93,7 +97,7 @@ function DashboardBody({ initial }: { initial: DashboardPayload }) {
         todayFocusActive &&
         selectionCount > 0 &&
         !selectedToday.has(thread.id) &&
-        (thread.status === "active" || thread.status === "paused");
+        showsOnTimeline(thread.status);
 
       return {
         thread,
@@ -135,19 +139,51 @@ function DashboardBody({ initial }: { initial: DashboardPayload }) {
   const detailRecord =
     dash.allThreads?.find((t) => t.id === detailId) ?? dash.timelineThreads.find((t) => t.id === detailId) ?? null;
 
+  const loadDetailLogs = React.useCallback(async (threadId: string) => {
+    try {
+      const sb = createBrowserSupabase();
+      const { data, error } = await sb
+        .from("daily_logs")
+        .select("*")
+        .eq("thread_id", threadId)
+        .order("log_date", { ascending: false });
+
+      if (error) throw error;
+      setDetailLogs((data as DailyLogRow[]) ?? []);
+    } catch {
+      setDetailLogs([]);
+    }
+  }, []);
+
+  React.useEffect(() => {
+    if (!detailId) {
+      setDetailLogs([]);
+      return;
+    }
+    void loadDetailLogs(detailId);
+  }, [detailId, loadDetailLogs]);
+
   const reload = React.useCallback(async () => {
     setSyncing(true);
 
     try {
       const sb = createBrowserSupabase();
-      const next = await hydrateDashboardPayload(sb, isoRef.current);
+      const todayISO = getTodayISO(dash.dateTimezone);
+      isoRef.current = todayISO;
+      const next = await hydrateDashboardPayload(sb, todayISO, dash.dateTimezone);
       setDash(next);
     } catch {
       /* ignore */
     } finally {
       setSyncing(false);
     }
-  }, []);
+  }, [dash.dateTimezone]);
+
+  useDayRolloverRefresh({
+    dateTimezone: dash.dateTimezone,
+    activeTodayISO: dash.serverTodayISO,
+    onRollover: reload,
+  });
 
   const saveThread = async (payload: {
     id?: string;
@@ -155,23 +191,40 @@ function DashboardBody({ initial }: { initial: DashboardPayload }) {
     description: string | null;
     category_id: string | null;
     color: string;
-    start_date: string;
-    due_date: string;
+    start_date: string | null;
+    due_date: string | null;
     status: ThreadStatus;
   }) => {
     setBusy(true);
 
     try {
       const sb = createBrowserSupabase();
-      const body = {
+      const todayISO = dash.serverTodayISO;
+      const body: {
+        name: string;
+        description: string;
+        category_id: string | null;
+        color: string;
+        status: ThreadStatus;
+        start_date?: string;
+        due_date?: string;
+      } = {
         name: payload.name,
         description: payload.description ?? "",
         category_id: payload.category_id,
         color: payload.color,
-        start_date: payload.start_date,
-        due_date: payload.due_date,
         status: payload.status,
       };
+
+      if (payload.status === "not_started") {
+        if (!payload.id) {
+          body.start_date = todayISO;
+          body.due_date = todayISO;
+        }
+      } else if (payload.start_date && payload.due_date) {
+        body.start_date = payload.start_date;
+        body.due_date = payload.due_date;
+      }
 
       if (payload.id) {
         const { error } = await sb.from("threads").update(body).eq("id", payload.id);
@@ -234,61 +287,67 @@ function DashboardBody({ initial }: { initial: DashboardPayload }) {
   async function persistNoteNow() {
     if (!detailId) return;
 
+    const trimmed = detailDraft.trim();
+    if (!trimmed) return;
+
+    const threadId = detailId;
+    const logDate = dash.serverTodayISO;
+    const draftSnapshot = detailDraft;
+    const now = new Date().toISOString();
+
+    setDetailDraft("");
+
+    setDetailLogs((prev) => {
+      const existing = prev.find((l) => l.log_date === logDate);
+      const entry: DailyLogRow = {
+        id: existing?.id ?? `pending-${logDate}`,
+        thread_id: threadId,
+        log_date: logDate,
+        note: trimmed,
+        created_at: existing?.created_at ?? now,
+        updated_at: now,
+      };
+      return [entry, ...prev.filter((l) => l.log_date !== logDate)].sort((a, b) =>
+        b.log_date.localeCompare(a.log_date),
+      );
+    });
+
     setBusy(true);
 
     try {
       const sb = createBrowserSupabase();
-      await sb.from("daily_logs").upsert(
-        {
-          thread_id: detailId,
-          log_date: dash.serverTodayISO,
-          note: detailDraft,
-        },
-        { onConflict: "thread_id,log_date" },
-      );
+      const { data, error } = await sb
+        .from("daily_logs")
+        .upsert(
+          {
+            thread_id: threadId,
+            log_date: logDate,
+            note: trimmed,
+          },
+          { onConflict: "thread_id,log_date" },
+        )
+        .select()
+        .single();
 
-      await reload();
+      if (error) throw error;
+
+      if (data) {
+        const saved = data as DailyLogRow;
+        setDetailLogs((prev) =>
+          [saved, ...prev.filter((l) => l.log_date !== logDate && l.id !== saved.id)].sort((a, b) =>
+            b.log_date.localeCompare(a.log_date),
+          ),
+        );
+      }
+
+      void reload();
+    } catch {
+      setDetailDraft(draftSnapshot);
+      await loadDetailLogs(threadId);
     } finally {
       setBusy(false);
     }
   }
-
-  const toggleMicrothread = async (subId: string, doneFlag: boolean) => {
-    setBusy(true);
-
-    try {
-      const sb = createBrowserSupabase();
-      const { error } = await sb.from("subthreads").update({ done: doneFlag }).eq("id", subId);
-
-      if (error) throw error;
-      await reload();
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const addMicrothread = async (title: string) => {
-    if (!detailRecord) return;
-
-    setBusy(true);
-
-    try {
-      const sb = createBrowserSupabase();
-      const nextOrder = Math.max(...(detailRecord.subthreads ?? []).map((x) => x.sort_order), 0) + 10;
-
-      const { error } = await sb.from("subthreads").insert({
-        thread_id: detailRecord.id,
-        name: title,
-        done: false,
-        sort_order: nextOrder || 10,
-      });
-
-      if (error) throw error;
-      await reload();
-    } finally {
-      setBusy(false);
-    }
-  };
 
   const createCategoryFold = async (label: string, hue: string) => {
     setBusy(true);
@@ -549,13 +608,13 @@ function DashboardBody({ initial }: { initial: DashboardPayload }) {
         <div className="flex min-h-0 min-w-0 flex-1 gap-2 overflow-hidden px-3 pb-3 pt-2 font-sans">
           <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-2 overflow-hidden">
             {todayFocusActive && selectionCount === 0 && dash.timelineThreads.length > 0 ?
-              <p className="shrink-0 rounded-md border border-amber-950/50 bg-amber-950/28 px-2.5 py-1.5 text-[11px] text-amber-50/95 leading-snug">
+              <p className="shrink-0 rounded-md border border-amber-900/40 bg-amber-950/35 px-2.5 py-1.5 text-[11px] text-amber-100/95 leading-snug">
                 Mark threads for today using the toggles on the timeline.
               </p>
             : null}
 
             {dash.timelineThreads.length === 0 ?
-              <div className="flex flex-1 flex-col items-center justify-center rounded-2xl border border-dashed border-white/18 bg-muted/70 py-20">
+              <div className="flex flex-1 flex-col items-center justify-center rounded-2xl border border-dashed border-lume-border-strong bg-lume-surface py-20">
                 <p className="mb-10 max-w-md px-8 text-center text-sm text-muted-foreground">
                   No active timelines yet. Bring threads into Lume once and they glow across mornings so nothing quietly stalls.
                 </p>
@@ -597,6 +656,7 @@ function DashboardBody({ initial }: { initial: DashboardPayload }) {
         todayISO={dash.serverTodayISO}
         noteDraft={detailDraft}
         onNoteDraftChange={setDetailDraft}
+        progressLogs={detailLogs}
         onCommitNoteNow={() => persistNoteNow()}
         isSelectedToday={
           dash.todaySelections.some(
@@ -606,12 +666,6 @@ function DashboardBody({ initial }: { initial: DashboardPayload }) {
         onToggleTodayFocus={async (v) => {
           if (!detailRecord) return;
           await toggleToday(detailRecord.id, v);
-        }}
-        onToggleSubthread={async (subId, done) => {
-          await toggleMicrothread(subId, done);
-        }}
-        onAddSubthread={async (title) => {
-          await addMicrothread(title);
         }}
         onClose={() => setDetailId(null)}
         onEditThread={() => {

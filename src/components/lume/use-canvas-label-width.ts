@@ -8,7 +8,7 @@ import {
   CANVAS_LABEL_W_MIN,
 } from "@/components/lume/thread-timeline";
 
-const STORAGE_KEY = "lume:canvas-label-width";
+const STORAGE_KEY = "lume:canvas-label-width-v2";
 
 function readStoredWidth() {
   if (typeof window === "undefined") return CANVAS_LABEL_W_DEFAULT;

@@ -10,11 +10,13 @@ import {
   getCenteredPeriodIndex,
   getXOnCanvas,
   scrollLeftForPeriodIndex,
+  scrollLeftForDateAtTrackStart,
   type ScrollableTimelineScale,
   type TimelineScale,
   type TimelineUnit,
 } from "@/lib/timeline-scale";
 import { type TimelinePreset, threadTouchesTimelineRange } from "@/lib/timeline";
+import { isNotStartedStatus } from "@/lib/thread-status";
 
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
@@ -31,6 +33,9 @@ import {
 import { useCanvasLabelWidth } from "./use-canvas-label-width";
 
 const PRESETS = ["month", "week", "year"] as const satisfies readonly TimelinePreset[];
+
+/** Padding from the track's left edge when snapping today into view. */
+const TODAY_TRACK_INSET_PX = 20;
 
 function utcNoonParts(iso: string) {
   return new Date(`${iso.split("T")[0]}T12:00:00.000Z`);
@@ -156,7 +161,7 @@ function PresetSwitcher({
   return (
     <div
       aria-label="Timeline scale"
-      className="inline-flex rounded-md border border-white/[0.06] bg-white/[0.02] p-0.5"
+      className="inline-flex rounded-md border border-lume-border bg-lume-surface p-0.5"
       role="group"
     >
       {PRESETS.map((key) => (
@@ -168,8 +173,8 @@ function PresetSwitcher({
           className={cn(
             "rounded px-2.5 py-0.5 text-[10px] font-medium tracking-wide",
             key === value ?
-              "bg-white/[0.08] text-foreground"
-            : "text-muted-foreground/70 hover:text-foreground/90",
+              "bg-lume-hover text-foreground"
+            : "text-lume-text-muted hover:text-foreground",
           )}
         >
           {labels[key]}
@@ -199,7 +204,7 @@ function PeriodNav({
         disabled={disabled}
         aria-label="Previous period"
         onClick={onPrev}
-        className="text-muted-foreground/70 hover:text-foreground"
+        className="text-lume-text-muted hover:text-foreground"
       >
         <ChevronLeft className="size-3.5" />
       </Button>
@@ -209,7 +214,7 @@ function PeriodNav({
         size="sm"
         disabled={disabled}
         onClick={onToday}
-        className="h-6 px-2 text-[10px] text-muted-foreground/75 hover:text-foreground"
+        className="h-6 px-2 text-[10px] text-lume-text-secondary hover:text-foreground"
       >
         Today
       </Button>
@@ -220,7 +225,7 @@ function PeriodNav({
         disabled={disabled}
         aria-label="Next period"
         onClick={onNext}
-        className="text-muted-foreground/70 hover:text-foreground"
+        className="text-lume-text-muted hover:text-foreground"
       >
         <ChevronRight className="size-3.5" />
       </Button>
@@ -250,7 +255,7 @@ function CanvasTimeGrid({
       {canvasScale.periods.map((period) => (
         <div
           key={period.anchorISO}
-          className="absolute top-0 h-full border-r border-white/[0.08]"
+          className="absolute top-0 h-full border-r border-lume-grid-strong"
           style={{ left: period.offsetPx, width: period.widthPx }}
         >
           {period.scale.units.map((unit, i) => {
@@ -263,9 +268,9 @@ function CanvasTimeGrid({
               <div
                 key={unit.kind === "day" ? unit.iso : unit.ymKey}
                 className={cn(
-                  "absolute top-0 border-r border-white/[0.035]",
-                  isTodayUnit && "bg-violet-500/[0.04]",
-                  unit.kind === "month" && "border-r-white/[0.06]",
+                  "absolute top-0 border-r border-lume-grid",
+                  isTodayUnit && "bg-lume-today-bg",
+                  unit.kind === "month" && "border-r-lume-grid-strong",
                 )}
                 style={{
                   left,
@@ -280,7 +285,7 @@ function CanvasTimeGrid({
 
       {todayInRange ?
         <div
-          className="absolute top-0 z-[2] w-px -translate-x-1/2 bg-violet-400/55 shadow-[0_0_12px_rgba(167,139,250,0.35)]"
+          className="absolute top-0 z-[2] w-px -translate-x-1/2 bg-lume-today-line shadow-[0_0_10px_var(--lume-today-line)]"
           style={{ left: todayX, height: canvasHeightPx }}
         />
       : null}
@@ -304,8 +309,8 @@ function RulerUnitCell({
     return (
       <div
         className={cn(
-          "flex h-full flex-col items-center justify-end border-r border-white/[0.06] pb-2",
-          isCurrentMonth ? "text-foreground/85" : "text-muted-foreground/55",
+          "flex h-full flex-col items-center justify-end border-r border-lume-grid-strong pb-2",
+          isCurrentMonth ? "text-foreground" : "text-lume-text-muted",
         )}
         style={{ width: scale.unitWidthPx, flexShrink: 0 }}
       >
@@ -320,15 +325,15 @@ function RulerUnitCell({
   return (
     <div
       className={cn(
-        "flex h-full flex-col items-center justify-end border-r border-white/[0.05] pb-1.5",
-        isToday && "bg-violet-500/[0.07]",
+        "flex h-full flex-col items-center justify-end border-r border-lume-grid pb-1.5",
+        isToday && "bg-lume-today-bg",
       )}
       style={{ width: scale.unitWidthPx, flexShrink: 0 }}
     >
       <span
         className={cn(
           "text-[10px] tabular-nums",
-          isToday ? "font-semibold text-violet-200/95" : "text-muted-foreground/65",
+          isToday ? "font-semibold text-lume-today" : "text-lume-text-secondary",
         )}
       >
         {format(dt, scale.preset === "week" ? "EEE d" : "d")}
@@ -349,7 +354,7 @@ function PeriodRuler({
   return (
     <div className="relative flex h-full w-full flex-col">
       <div className="pointer-events-none absolute top-1.5 left-2 z-10">
-        <span className="text-[10px] font-medium tracking-wide text-muted-foreground/70 uppercase">
+        <span className="text-[10px] font-medium tracking-wide text-lume-text-secondary uppercase">
           {periodLabel}
         </span>
       </div>
@@ -387,14 +392,27 @@ function LabelRailResizeHandle({
       className={cn(
         "absolute top-0 -right-px z-30 h-full w-2 cursor-col-resize",
         "touch-none before:absolute before:inset-y-3 before:left-1/2 before:w-px",
-        "before:-translate-x-1/2 before:bg-white/10 before:transition-colors",
-        "hover:before:bg-violet-400/45 active:before:bg-violet-400/60",
+        "before:-translate-x-1/2 before:bg-lume-border-strong before:transition-colors",
+        "hover:before:bg-lume-accent/45 active:before:bg-lume-accent/60",
       )}
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}
       onPointerUp={onPointerUp}
       onPointerCancel={onPointerCancel}
     />
+  );
+}
+
+function ThreadCategoryTag({ name, color }: { name: string; color: string }) {
+  return (
+    <span className="mt-0.5 inline-flex max-w-full items-center gap-1 rounded-sm border border-lume-border bg-lume-surface/50 px-1 py-px">
+      <span
+        aria-hidden
+        className="size-1 shrink-0 rounded-full"
+        style={{ backgroundColor: color }}
+      />
+      <span className="truncate text-[9px] leading-none text-lume-text-muted">{name}</span>
+    </span>
   );
 }
 
@@ -414,16 +432,21 @@ function FloatingThreadLabel({
     setTruncated(next);
   }, []);
 
+  const category = tv.thread.category;
+  const notStarted = isNotStartedStatus(tv.thread.status);
+
   const openButton = (
     <button
       type="button"
-      aria-label={tv.thread.name}
+      aria-label={category ? `${tv.thread.name}, ${category.name}` : tv.thread.name}
       onClick={() => tv.onOpen()}
       className={cn(
         "flex min-w-0 flex-1 items-start gap-1.5 text-left outline-none",
         "rounded-md py-1.5 pr-1 pl-0.5 transition-colors",
-        "hover:bg-white/[0.04] focus-visible:ring-1 focus-visible:ring-violet-500/40",
-        tv.isSelectedToday && "bg-violet-500/[0.08]",
+        "hover:bg-lume-hover focus-visible:ring-1 focus-visible:ring-lume-focus",
+        tv.isSelectedToday && !notStarted && "bg-lume-selection",
+        notStarted &&
+          "border border-amber-400/55 bg-amber-500/12 shadow-[0_0_14px_rgb(251_191_36_/_0.22)] hover:bg-amber-500/18",
       )}
     >
       <span
@@ -433,16 +456,21 @@ function FloatingThreadLabel({
           tv.isSelectedToday && "shadow-[0_0_8px_currentColor]",
         )}
         style={{
-          backgroundColor: tv.thread.color,
-          color: tv.thread.color,
-          opacity: tv.isSelectedToday ? 1 : 0.85,
+          backgroundColor: notStarted ? "#fbbf24" : tv.thread.color,
+          color: notStarted ? "#fbbf24" : tv.thread.color,
+          opacity: tv.isSelectedToday ? 1 : notStarted ? 1 : 0.85,
         }}
       />
-      <ThreadLabelText
-        text={tv.thread.name}
-        onTruncatedChange={onTruncatedChange}
-        className="text-[11px] text-foreground/90"
-      />
+      <span className="min-w-0 flex-1">
+        <ThreadLabelText
+          text={tv.thread.name}
+          onTruncatedChange={onTruncatedChange}
+          className="text-[11px] text-foreground"
+        />
+        {category ?
+          <ThreadCategoryTag name={category.name} color={category.color} />
+        : null}
+      </span>
     </button>
   );
 
@@ -509,13 +537,15 @@ export function TimelineCanvas({
 
   const visibleThreadViews = React.useMemo(
     () =>
-      threadViews.filter((tv) =>
-        threadTouchesTimelineRange(
-          tv.thread.start_date,
-          tv.thread.due_date,
-          canvasScale.canvasStartISO,
-          canvasScale.canvasEndISO,
-        ),
+      threadViews.filter(
+        (tv) =>
+          isNotStartedStatus(tv.thread.status) ||
+          threadTouchesTimelineRange(
+            tv.thread.start_date,
+            tv.thread.due_date,
+            canvasScale.canvasStartISO,
+            canvasScale.canvasEndISO,
+          ),
       ),
     [threadViews, canvasScale.canvasStartISO, canvasScale.canvasEndISO],
   );
@@ -542,9 +572,14 @@ export function TimelineCanvas({
 
   const scrollToToday = React.useCallback(
     (behavior: ScrollBehavior = "smooth") => {
-      scrollToPeriodIndex(canvasScale.focusPeriodIndex, behavior);
+      const el = scrollRef.current;
+      if (!el || viewportWidthPx <= 0) return;
+      el.scrollTo({
+        left: scrollLeftForDateAtTrackStart(todayISO, canvasScale, TODAY_TRACK_INSET_PX),
+        behavior,
+      });
     },
-    [canvasScale.focusPeriodIndex, scrollToPeriodIndex],
+    [canvasScale, todayISO, viewportWidthPx],
   );
 
   const presetRef = React.useRef(preset);
@@ -584,12 +619,12 @@ export function TimelineCanvas({
         <div
           className={cn(
             "relative flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl",
-            "border border-white/[0.06] bg-[#0b0d12]",
-            "shadow-[inset_0_1px_0_rgb(255_255_255/4%)]",
+            "border border-lume-border bg-lume-canvas",
+            "shadow-[inset_0_1px_0_var(--lume-border)]",
             labelRail.isResizing && "select-none",
           )}
         >
-        <div className="flex shrink-0 items-center gap-2 border-b border-white/[0.05] bg-[#0b0d12]/90 px-3 py-2 backdrop-blur-sm">
+        <div className="flex shrink-0 items-center gap-2 border-b border-lume-border bg-lume-canvas-bar/95 px-3 py-2 backdrop-blur-sm">
           <PresetSwitcher value={preset} onChange={setPreset} />
           <PeriodNav
             disabled={navDisabled}
@@ -597,10 +632,10 @@ export function TimelineCanvas({
             onNext={handleNext}
             onToday={() => scrollToToday()}
           />
-          <p className="ml-auto text-[10px] tabular-nums text-muted-foreground/65">
-            <span className="font-medium text-violet-300/90">{focusCount}</span>
+          <p className="ml-auto text-[10px] tabular-nums text-lume-text-muted">
+            <span className="font-medium text-lume-accent">{focusCount}</span>
             {" focus · "}
-            <span className="font-medium text-foreground/80">{threadViews.length}</span>
+            <span className="font-medium text-foreground">{threadViews.length}</span>
             {" threads"}
           </p>
         </div>
@@ -623,16 +658,16 @@ export function TimelineCanvas({
             }}
           >
             <div
-              className="sticky top-0 z-30 flex border-b border-white/[0.06] bg-[#0b0d12]/92 backdrop-blur-md"
+              className="sticky top-0 z-30 flex border-b border-lume-border bg-lume-canvas-bar/95 backdrop-blur-md"
               style={{ height: CANVAS_RULER_H }}
             >
               <div
-                className="relative sticky left-0 z-40 shrink-0 border-r border-white/[0.04] bg-[#0b0d12]/95 px-2"
+                className="relative sticky left-0 z-40 shrink-0 border-r border-lume-border bg-lume-canvas-label px-2"
                 style={{ width: labelRail.labelWidthPx, height: CANVAS_RULER_H }}
                 data-no-pan
               >
                 <div className="flex h-full items-end pb-2">
-                  <span className="text-[9px] font-medium tracking-[0.14em] text-muted-foreground/45 uppercase">
+                  <span className="text-[9px] font-medium tracking-[0.14em] text-lume-text-muted uppercase">
                     Canvas
                   </span>
                 </div>
@@ -652,7 +687,7 @@ export function TimelineCanvas({
                   {canvasScale.periods.map((period) => (
                     <div
                       key={period.anchorISO}
-                      className="h-full shrink-0 border-r border-white/[0.08]"
+                      className="h-full shrink-0 border-r border-lume-grid-strong"
                       style={{ width: period.widthPx }}
                     >
                       <PeriodRuler scale={period.scale} todayISO={todayISO} />
@@ -664,8 +699,8 @@ export function TimelineCanvas({
 
             <div className="flex">
               <div
-                className="relative sticky left-0 z-20 shrink-0 border-r border-white/[0.03] bg-[#0b0d12]/80 backdrop-blur-[2px]"
-                style={{ width: labelRail.labelWidthPx }}
+                className="relative sticky left-0 z-20 shrink-0 border-r border-lume-border bg-lume-canvas-label backdrop-blur-[2px]"
+                style={{ width: labelRail.labelWidthPx, height: canvasBodyHeightPx }}
                 data-no-pan
               >
                 <LabelRailResizeHandle
@@ -677,7 +712,8 @@ export function TimelineCanvas({
                 {visibleThreadViews.map((tv, idx) => (
                   <div
                     key={tv.thread.id}
-                    style={{ height: CANVAS_LANE_PITCH - 4, marginTop: idx === 0 ? 8 : 0 }}
+                    className="absolute left-0 w-full"
+                    style={{ top: idx * CANVAS_LANE_PITCH + 8, height: CANVAS_LANE_PITCH - 4 }}
                   >
                     <FloatingThreadLabel
                       tv={tv}
@@ -703,7 +739,7 @@ export function TimelineCanvas({
 
                     {visibleThreadViews.length === 0 ?
                       <div className="absolute inset-0 flex items-center justify-center">
-                        <p className="text-[12px] text-muted-foreground/50">
+                        <p className="text-[12px] text-lume-text-muted">
                           No threads in this time range.
                         </p>
                       </div>
@@ -718,14 +754,16 @@ export function TimelineCanvas({
                             width: canvasScale.canvasWidthPx,
                           }}
                         >
-                          <ThreadStrand
-                            canvasScale={canvasScale}
-                            todayISO={todayISO}
-                            thread={tv.thread}
-                            dimmed={tv.dimmed}
-                            isSelectedToday={tv.isSelectedToday}
-                            onActivate={() => tv.onOpen()}
-                          />
+                          {isNotStartedStatus(tv.thread.status) ? null : (
+                            <ThreadStrand
+                              canvasScale={canvasScale}
+                              todayISO={todayISO}
+                              thread={tv.thread}
+                              dimmed={tv.dimmed}
+                              isSelectedToday={tv.isSelectedToday}
+                              onActivate={() => tv.onOpen()}
+                            />
+                          )}
                         </div>
                       ))
                     )}
