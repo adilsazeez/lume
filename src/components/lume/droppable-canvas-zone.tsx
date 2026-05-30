@@ -16,7 +16,7 @@ export function DroppableCanvasZone({
   disabled?: boolean;
   onDropActivate: (threadId: string) => void;
 }) {
-  const { draggingThreadId, isOverCanvas, setIsOverCanvas, endDrag } = useThreadDragState();
+  const { isOverCanvas, setIsOverCanvas, endDrag } = useThreadDragState();
 
   const showHighlight = isOverCanvas && !disabled;
 
@@ -52,16 +52,6 @@ export function DroppableCanvasZone({
           aria-hidden
           className="pointer-events-none absolute inset-0 z-10 rounded-xl border-2 border-dashed border-lume-accent/50 bg-lume-accent/5"
         />
-      : null}
-      {draggingThreadId && !disabled && !showHighlight ?
-        <p className="pointer-events-none absolute inset-x-0 top-2 z-20 mx-auto w-fit rounded-full border border-lume-border bg-lume-canvas-bar/95 px-3 py-1 text-[10px] text-lume-text-muted shadow-sm">
-          Drag onto canvas to activate
-        </p>
-      : null}
-      {showHighlight ?
-        <p className="pointer-events-none absolute inset-x-0 top-2 z-20 mx-auto w-fit rounded-full border border-lume-accent/30 bg-lume-canvas-bar/95 px-3 py-1 text-[10px] font-medium text-lume-accent shadow-sm">
-          Drop to activate on canvas
-        </p>
       : null}
       {children}
     </div>

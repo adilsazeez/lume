@@ -782,10 +782,10 @@ function DashboardBody({ initial }: { initial: DashboardPayload }) {
             size="sm"
             className="h-7 px-2 text-[11px] text-muted-foreground"
             disabled={busy}
+            aria-label="Settings"
             onClick={() => setSettingsOpen(true)}
           >
             <Settings aria-hidden className="size-3.5" />
-            Settings
           </Button>
           <Button
             type="button"
@@ -874,10 +874,7 @@ function DashboardBody({ initial }: { initial: DashboardPayload }) {
                 <DroppableCanvasZone disabled={busy} onDropActivate={(id) => void activateThread(id)}>
                   {dash.timelineThreads.length === 0 ?
                     <div className="flex min-h-[280px] flex-1 flex-col items-center justify-center rounded-xl border border-dashed border-lume-border-strong bg-lume-surface/50 px-6 py-12 text-center">
-                      <p className="mb-1 text-sm font-medium text-foreground">Canvas is clear</p>
-                      <p className="max-w-xs text-[12px] leading-relaxed text-muted-foreground">
-                        Drag a thread from Dormant below, or tap Start to activate it on your life canvas.
-                      </p>
+                      <p className="text-[12px] text-muted-foreground">Drag from Dormant to activate a thread.</p>
                     </div>
                   : (
                     <TimelineCanvas

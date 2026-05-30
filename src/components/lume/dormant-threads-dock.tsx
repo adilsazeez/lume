@@ -89,7 +89,6 @@ export function DormantThreadsDock({
             Dormant
             <span className="ml-1.5 tabular-nums text-lume-text-muted">({threads.length})</span>
           </p>
-          <p className="text-[10px] leading-snug text-lume-text-muted">Drag or tap Start to bring onto canvas</p>
         </div>
         <Button
           type="button"

@@ -74,20 +74,3 @@ export function getLumeDayISO(
 
   return calendarDate;
 }
-
-/** Human-readable summary for settings UI. */
-export function describeDayBoundary(boundary: DayBoundarySettings): string {
-  const start = normalizeTimeOfDay(boundary.day_start_time);
-  const end = normalizeTimeOfDay(boundary.day_end_time);
-  if (start === end) return "Follows the calendar day (midnight rollover).";
-  return `Your Lume day runs until ${formatTime12h(end)}${start !== "00:00" ? ` and begins at ${formatTime12h(start)}` : ""}.`;
-}
-
-function formatTime12h(hhmm: string): string {
-  const [hStr, mStr] = normalizeTimeOfDay(hhmm).split(":");
-  const h24 = Number(hStr);
-  const m = Number(mStr);
-  const ampm = h24 >= 12 ? "PM" : "AM";
-  const hour12 = h24 % 12 || 12;
-  return m === 0 ? `${hour12} ${ampm}` : `${hour12}:${mStr} ${ampm}`;
-}
