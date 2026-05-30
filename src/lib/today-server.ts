@@ -1,5 +1,5 @@
 /**
- * Canonical "today" boundary for SSR + DB queries aligned to a chosen IANA TZ.
+ * IANA timezone for Lume day-boundary calculations (see user_settings + lume-day.ts).
  */
 export function getServerTimezone(): string {
   const fromEnv = process.env.DATE_TZ;

@@ -8,7 +8,8 @@ import { MiniTaskList } from "@/components/lume/mini-task-list";
 import { QuickAddMiniTask } from "@/components/lume/quick-add-mini-task";
 
 import { filterMiniTasks, sortMiniTasks } from "@/lib/mini-tasks";
-import { showsOnTimeline } from "@/lib/thread-status";
+import { WORKFLOW_COPY } from "@/lib/lume-workflow";
+import { isOnCanvas } from "@/lib/thread-placement";
 import { cn } from "@/lib/utils";
 
 const FILTERS: { key: MiniTaskFilter; label: string }[] = [
@@ -67,7 +68,7 @@ export function MiniTaskPanel({
   }, []);
 
   const activeThreads = React.useMemo(
-    () => threads.filter((t) => showsOnTimeline(t.status)),
+    () => threads.filter((t) => isOnCanvas(t)),
     [threads],
   );
 
@@ -109,10 +110,10 @@ export function MiniTaskPanel({
       )}
     >
       <div className="shrink-0 border-b border-lume-border-strong bg-lume-panel/95 px-3 py-2">
-        <div className="flex items-center justify-between gap-2">
-          <div>
-            <h2 className="text-[11px] font-medium tracking-[0.08em] text-foreground uppercase">Tasks</h2>
-            <p className="text-[10px] text-lume-text-muted">Short actions inside threads</p>
+        <div className="flex items-start justify-between gap-2">
+          <div className="min-w-0">
+            <h2 className="text-[11px] font-medium tracking-[0.08em] text-foreground uppercase">Mini-tasks</h2>
+            <p className="mt-0.5 text-[10px] leading-snug text-lume-text-muted">{WORKFLOW_COPY.miniTasks.hint}</p>
           </div>
           <span className="text-[10px] tabular-nums text-lume-text-secondary">
             {isCompletedTab ?

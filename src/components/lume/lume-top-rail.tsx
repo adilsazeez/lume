@@ -4,7 +4,9 @@ import type { ReactNode } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 
+import { WORKFLOW_COPY } from "@/lib/lume-workflow";
 import { useTodayFocusStore } from "@/stores/lume-store";
 
 export function LumeTopRail({
@@ -42,17 +44,26 @@ export function LumeTopRail({
         </div>
 
         <div className="ml-auto flex shrink-0 items-center gap-2">
-          <label className="flex cursor-pointer items-center gap-1.5 pr-1">
-            <span className="text-[10px] font-medium tracking-wide text-lume-text-muted uppercase">
-              Focus
-            </span>
-            <Switch
-              size="sm"
-              checked={todayFocusActive}
-              aria-label="Toggle today focus mode"
-              onCheckedChange={setTodayFocusActive}
+          <Tooltip>
+            <TooltipTrigger
+              render={
+                <label className="flex cursor-pointer items-center gap-1.5 rounded-md px-1 py-0.5">
+                  <span className="text-[10px] font-medium tracking-wide text-lume-text-muted uppercase">
+                    Focus view
+                  </span>
+                  <Switch
+                    size="sm"
+                    checked={todayFocusActive}
+                    aria-label="Focus view — separate Focus from Next on the canvas"
+                    onCheckedChange={setTodayFocusActive}
+                  />
+                </label>
+              }
             />
-          </label>
+            <TooltipContent side="bottom" className="max-w-[240px] text-pretty">
+              When on, threads in today&apos;s Focus stay bright; Next threads dim until you want them.
+            </TooltipContent>
+          </Tooltip>
 
           <Button
             type="button"

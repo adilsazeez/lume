@@ -20,7 +20,7 @@ import { Textarea } from "@/components/ui/textarea";
 
 import { NEON_THREAD_SWATCHES } from "@/lib/neon-presets";
 import { isoCalendarAdd } from "@/lib/timeline";
-import { THREAD_STATUS_OPTIONS, isNotStartedStatus, threadStatusLabel } from "@/lib/thread-status";
+import { THREAD_STATUS_OPTIONS, isNotStartedStatus, placeholderThreadDates, threadStatusLabel } from "@/lib/thread-status";
 import { cn } from "@/lib/utils";
 
 const STATUS_ITEMS = THREAD_STATUS_OPTIONS;
@@ -108,8 +108,8 @@ export function ThreadFormDialog({
     description: string | null;
     category_id: string | null;
     color: string;
-    start_date: string | null;
-    due_date: string | null;
+    start_date: string;
+    due_date: string;
     status: ThreadStatus;
   }) => Promise<void>;
 }) {
@@ -154,18 +154,28 @@ export function ThreadFormDialog({
       return;
     }
 
-    await onSubmit({
-      id: editing?.id,
-      name: name.trim(),
-      description: description.trim().length ? description.trim() : null,
-      category_id: categoryId ? categoryId : null,
-      color,
-      start_date: isNotStarted ? null : startDate,
-      due_date: isNotStarted ? null : dueDate,
-      status,
-    });
+    const dates = isNotStarted
+      ? placeholderThreadDates(localTodayISO)
+      : { start_date: startDate, due_date: dueDate };
 
-    onOpenChange(false);
+    try {
+      await onSubmit({
+        id: editing?.id,
+        name: name.trim(),
+        description: description.trim().length ? description.trim() : null,
+        category_id: categoryId ? categoryId : null,
+        color,
+        start_date: dates.start_date,
+        due_date: dates.due_date,
+        status,
+      });
+
+      onOpenChange(false);
+    } catch (err) {
+      const message =
+        err instanceof Error ? err.message : "Could not save this thread. Try again.";
+      window.alert(message);
+    }
   }
 
   return (
@@ -174,18 +184,17 @@ export function ThreadFormDialog({
         <form className="space-y-[22px]" onSubmit={handleSubmit}>
           <DialogHeader className="space-y-2 gap-5">
             <DialogTitle className="text-[18px]">
-              {(editing ?? null) ? "Edit thread" : "Bring a thread to life"}
+              {(editing ?? null) ? "Edit thread" : "New thread"}
             </DialogTitle>
-
-            <DialogDescription className="text-[13px] leading-snug">
-              Give this effort a clear thread—you’ll see active spans together every morning instead of juggling lists.
+            <DialogDescription className="sr-only">
+              {(editing ?? null) ? "Edit thread details" : "Create a new thread"}
             </DialogDescription>
           </DialogHeader>
 
           <div className="grid gap-[18px]">
             <div className="space-y-[13px]">
               <Label className="text-[13px]" htmlFor="lume-thread-name">
-                Thread title
+                Name
               </Label>
 
               <Input
@@ -203,21 +212,21 @@ export function ThreadFormDialog({
 
             <div className="space-y-[13px]">
               <Label className="text-[13px]" htmlFor="lume-thread-detail">
-                One-line description
+                Description
               </Label>
 
               <Textarea
                 id="lume-thread-detail"
-                rows={4}
+                rows={3}
                 value={description}
                 disabled={busy}
                 onChange={(e) => setDescription(e.target.value)}
-                placeholder="Why this deserves its own thread on the timeline..."
+                placeholder="Optional"
                 className="border-white/43 bg-muted/78 text-[14px]"
               />
 
               <div className="space-y-[13px]">
-                <Label className="text-[13px]">Neon pigment</Label>
+                <Label className="text-[13px]">Color</Label>
 
                 <div className="flex flex-wrap gap-[12px]">
                   {NEON_THREAD_SWATCHES.map(({ hex, label }) => (
@@ -260,7 +269,7 @@ export function ThreadFormDialog({
                   className={cn(selectFieldClass)}
                 >
                   <option key="__thread_none_cat__" value="">
-                    Tagless focus
+                    None
                   </option>
 
                   {[...categories].sort((a, b) => a.name.localeCompare(b.name)).map((c) => (
@@ -309,7 +318,7 @@ export function ThreadFormDialog({
                 <div className="grid gap-[10px] sm:col-span-6 md:grid-cols-2">
                   <div className="space-y-[9px]">
                     <Label className="text-[13px]" htmlFor="lume-thread-start">
-                      Start anchor
+                      Start
                     </Label>
                     <Input
                       type="date"
@@ -330,7 +339,7 @@ export function ThreadFormDialog({
                   </div>
                   <div className="space-y-[11px]">
                     <Label className="text-[13px]" htmlFor="lume-thread-due">
-                      Due horizon
+                      Due
                     </Label>
                     <Input
                       type="date"
@@ -344,11 +353,7 @@ export function ThreadFormDialog({
                   </div>
                 </div>
               </div>
-            : (
-              <p className="text-[12px] leading-snug text-muted-foreground">
-                Start and due dates unlock when you move this thread out of Not started.
-              </p>
-            )}
+            : null}
           </div>
 
           <DialogFooter className="flex flex-row flex-wrap-reverse items-center gap-[13px] sm:justify-end">
@@ -369,7 +374,7 @@ export function ThreadFormDialog({
               type="submit"
               disabled={Boolean(busy || !name.trim())}
             >
-              {(editing ?? null) ? "Save thread" : "Create thread"}
+              {(editing ?? null) ? "Save" : "Create"}
             </Button>
           </DialogFooter>
         </form>

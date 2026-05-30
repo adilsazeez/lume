@@ -1,5 +1,7 @@
 export type ThreadStatus = "not_started" | "active" | "paused" | "completed" | "archived";
 
+export type ThreadCanvasPlacement = "active" | "dormant";
+
 export type CategoryRow = {
   id: string;
   name: string;
@@ -16,6 +18,7 @@ export type ThreadRow = {
   start_date: string;
   due_date: string;
   status: ThreadStatus;
+  canvas_placement: ThreadCanvasPlacement;
   created_at: string;
   updated_at: string;
   category?: CategoryRow | null;
@@ -57,14 +60,30 @@ export type MiniTaskRow = {
 
 export type MiniTaskFilter = "all" | "today" | "upcoming" | "done";
 
+export type DayBoundarySettings = {
+  day_start_time: string;
+  day_end_time: string;
+};
+
+export type UserSettingsRow = {
+  id: string;
+  day_start_time: string;
+  day_end_time: string;
+  created_at: string;
+  updated_at: string;
+};
+
 export type DashboardPayload = {
   categories: CategoryRow[];
   timelineThreads: ThreadRow[];
+  dormantThreads: ThreadRow[];
   allThreads?: ThreadRow[];
   todaySelections: TodaySelectionRow[];
   todayLogs: DailyLogRow[];
   miniTasks: MiniTaskRow[];
+  /** Active Lume day (`yyyy-MM-dd`) — respects custom day boundary, not strict midnight. */
   serverTodayISO: string;
-  /** IANA timezone used for calendar-day boundaries (rollover polling). */
+  /** IANA timezone used for day-boundary calculations. */
   dateTimezone: string;
+  userSettings: UserSettingsRow;
 };

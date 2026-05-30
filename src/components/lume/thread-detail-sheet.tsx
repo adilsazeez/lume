@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { format, parseISO } from "date-fns";
-import { PencilIcon, Trash2 } from "lucide-react";
+import { PencilIcon, Trash2, Moon } from "lucide-react";
 
 import type { DailyLogRow, ThreadRow } from "@/types/lume";
 
@@ -46,7 +46,7 @@ function ProgressHistory({
   if (history.length === 0) {
     return (
       <p className="px-1 py-6 text-center text-xs text-lume-text-muted">
-        No progress yet. Submit a note above to start the trail.
+        No notes yet.
       </p>
     );
   }
@@ -126,6 +126,8 @@ export function ThreadDetailSheet(props: {
   onClose: () => void;
   onEditThread: () => void;
   onDeleteThread: () => Promise<void>;
+  onParkToDormant?: () => Promise<void>;
+  showParkAction?: boolean;
 }) {
   const {
     open,
@@ -141,6 +143,8 @@ export function ThreadDetailSheet(props: {
     onClose,
     onEditThread,
     onDeleteThread,
+    onParkToDormant,
+    showParkAction = false,
   } = props;
 
   if (!thread) return null;
@@ -184,7 +188,7 @@ export function ThreadDetailSheet(props: {
           "pb-[calc(env(safe-area-inset-bottom,0px)+1rem)]",
         )}
       >
-        <SheetHeader className="shrink-0 space-y-4 border-b border-white/13 p-6 text-start">
+        <SheetHeader className="shrink-0 space-y-4 border-b border-white/13 p-6 pr-14 text-start">
           <div className="flex items-start gap-4">
             <span
               aria-hidden
@@ -199,31 +203,31 @@ export function ThreadDetailSheet(props: {
             />
 
             <div className="min-w-0 flex-1 space-y-2">
-              <SheetTitle className="text-xl leading-tight">{thread.name}</SheetTitle>
+              <SheetTitle className="pr-1 text-xl leading-tight">{thread.name}</SheetTitle>
               <SheetDescription className="sr-only">
                 Inspect this thread spanning start to due anchors.
               </SheetDescription>
 
-              <div className="flex flex-wrap gap-2">
+              <div className="flex flex-wrap items-center gap-2">
                 <Badge variant="outline">{thread.category?.name ?? "Uncategorized"}</Badge>
                 <Badge variant="outline">{threadStatusLabel(thread.status)}</Badge>
-
-                <Badge
-                  variant="secondary"
-                  className={cn(urgency === "hot" && "border-orange-900/72 text-orange-100")}
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon-sm"
+                  disabled={busy}
+                  className="shrink-0"
+                  onClick={onEditThread}
                 >
-                  urgency {urgency}
-                </Badge>
+                  <PencilIcon className="size-4" aria-hidden />
+                  <span className="sr-only">Edit thread</span>
+                </Button>
               </div>
 
-              <p className="text-[13px] leading-relaxed text-muted-foreground">
-                {thread.description || "Add a short signal line when you revisit this thread."}
-              </p>
+              {thread.description ?
+                <p className="text-[13px] leading-relaxed text-muted-foreground">{thread.description}</p>
+              : null}
             </div>
-
-            <Button type="button" variant="outline" size="sm" disabled={busy} onClick={onEditThread}>
-              <PencilIcon className="mr-2 size-4" aria-hidden /> Edit thread
-            </Button>
           </div>
 
           <Separator className="bg-lume-border-strong" />
@@ -231,55 +235,45 @@ export function ThreadDetailSheet(props: {
           {!notStarted ?
             <dl className="grid gap-4 text-muted-foreground sm:grid-cols-2">
               <div>
-                <dt className="text-[11px] uppercase tracking-[0.22em]">Start anchor</dt>
+                <dt className="text-[11px] uppercase tracking-[0.22em]">Start</dt>
                 <dd className="font-mono text-sm text-foreground">{fmtDay(thread.start_date)}</dd>
               </div>
               <div>
-                <dt className="text-[11px] uppercase tracking-[0.22em]">Due horizon</dt>
+                <dt className="text-[11px] uppercase tracking-[0.22em]">Due</dt>
                 <dd className="font-mono text-[13px]" style={{ color: thread.color }}>
                   {fmtDay(thread.due_date)}
                 </dd>
               </div>
             </dl>
-          : (
-            <p className="text-[12px] text-muted-foreground">
-              Not started yet — set pace to Active in Edit thread to anchor start and due dates.
-            </p>
-          )}
+          : null}
         </SheetHeader>
 
         <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
           <div className="flex min-h-0 flex-1 flex-col gap-8 overflow-hidden px-6 py-6">
-            <section className="shrink-0 space-y-2">
+            <section className="shrink-0">
               <div className="flex items-center justify-between gap-6">
-                <Label htmlFor={`today-focus-${thread.id}`}>Work on today</Label>
+                <Label htmlFor={`today-focus-${thread.id}`}>Focus today</Label>
                 <Switch
                   id={`today-focus-${thread.id}`}
                   checked={isSelectedToday}
                   disabled={busy}
-                  aria-label="Toggle today-focus visibility for this thread"
+                  aria-label="Add this thread to today's focus"
+                  title="Today's focus"
                   onCheckedChange={(checked) =>
                     void onToggleTodayFocus(checked === true)
                   }
                 />
               </div>
-              <p className="text-xs text-muted-foreground">
-                Pairs with the Today focus mode switch in the cockpit header strip.
-              </p>
             </section>
 
             <section className="flex min-h-0 flex-1 flex-col gap-3 overflow-hidden">
-              <div className="shrink-0">
-                <Label htmlFor={`note-${thread.id}`}>Progress note</Label>
-                <p className="mt-0.5 text-xs text-lume-text-muted">Today · {fmtDay(todayISO)}</p>
-              </div>
-
               <form className="shrink-0 space-y-2" onSubmit={(e) => void submitProgressNote(e)}>
                 <Textarea
                   id={`note-${thread.id}`}
                   disabled={busy}
                   rows={3}
-                  placeholder="What moved forward on this thread today?"
+                  placeholder="What moved today?"
+                  aria-label="Progress note"
                   value={noteDraft}
                   onChange={(event) => onNoteDraftChange(event.target.value)}
                 />
@@ -291,10 +285,7 @@ export function ThreadDetailSheet(props: {
                 </div>
               </form>
 
-              <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-hidden pt-1">
-                <p className="shrink-0 text-[11px] font-medium tracking-wide text-lume-text-secondary uppercase">
-                  Progress history
-                </p>
+              <div className="flex min-h-0 flex-1 flex-col overflow-hidden pt-1">
                 <ProgressHistoryFeed
                   className="min-h-0 flex-1"
                   logs={progressLogs}
@@ -304,7 +295,20 @@ export function ThreadDetailSheet(props: {
               </div>
             </section>
 
-            <section className="shrink-0 border-t border-lume-border-strong pt-4">
+            <section className="flex shrink-0 flex-col gap-2 border-t border-lume-border-strong pt-4">
+              {showParkAction && onParkToDormant ?
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={busy}
+                  className="justify-start border-amber-900/35 text-amber-100/90 hover:bg-amber-500/10"
+                  onClick={() => void onParkToDormant()}
+                >
+                  <Moon className="mr-2 size-4" aria-hidden />
+                  Park for later
+                </Button>
+              : null}
               <Button
                 type="button"
                 variant="destructive"
@@ -313,7 +317,7 @@ export function ThreadDetailSheet(props: {
                 onClick={() => void removeThread()}
               >
                 <Trash2 className="mr-2 size-4" aria-hidden />
-                Delete thread
+                Delete
               </Button>
             </section>
           </div>

@@ -17,11 +17,13 @@ import {
 } from "@/lib/timeline-scale";
 import { type TimelinePreset, threadTouchesTimelineRange } from "@/lib/timeline";
 import { isNotStartedStatus } from "@/lib/thread-status";
+import { buildCanvasLanes, layoutCanvasLanes, WORKFLOW_COPY } from "@/lib/lume-workflow";
 
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
+import { CanvasSectionLabel } from "./canvas-section-label";
 import { ThreadInlineAddTaskButton } from "./thread-inline-add-task-button";
 import { ThreadLabelText } from "./thread-label-text";
 import {
@@ -503,7 +505,8 @@ function FloatingThreadLabel({
           size="sm"
           checked={tv.isSelectedToday}
           disabled={busy}
-          aria-label={`Work on ${tv.thread.name} today`}
+          aria-label={`Add ${tv.thread.name} to today's focus`}
+          title="Today's focus"
           onCheckedChange={(checked) => onToggleToday(tv.thread.id, checked === true)}
         />
       </div>
@@ -515,12 +518,18 @@ export function TimelineCanvas({
   threadViews,
   todayISO,
   busy,
+  focusViewOn,
+  focusCount,
+  activeCount,
   onToggleToday,
   onAddMiniTask,
 }: {
   threadViews: TimelineThreadView[];
   todayISO: string;
   busy: boolean;
+  focusViewOn: boolean;
+  focusCount: number;
+  activeCount: number;
   onToggleToday: (threadId: string, next: boolean) => void;
   onAddMiniTask?: (threadId: string) => void;
 }) {
@@ -550,13 +559,24 @@ export function TimelineCanvas({
     [threadViews, canvasScale.canvasStartISO, canvasScale.canvasEndISO],
   );
 
-  const focusCount = React.useMemo(
-    () => threadViews.filter((tv) => tv.isSelectedToday).length,
-    [threadViews],
+  const laneItems = React.useMemo(
+    () => buildCanvasLanes(visibleThreadViews, focusViewOn, focusCount),
+    [visibleThreadViews, focusViewOn, focusCount],
   );
 
-  const laneCount = Math.max(visibleThreadViews.length, 1);
-  const canvasBodyHeightPx = laneCount * CANVAS_LANE_PITCH + 32;
+  const laidOutLanes = React.useMemo(() => layoutCanvasLanes(laneItems), [laneItems]);
+
+  const canvasBodyHeightPx =
+    laidOutLanes.length > 0
+      ? laidOutLanes[laidOutLanes.length - 1]!.top + laidOutLanes[laidOutLanes.length - 1]!.height + 16
+      : CANVAS_LANE_PITCH + 32;
+
+  const sectionVariant = (id: string) => {
+    if (id === "focus") return "focus" as const;
+    if (id === "next") return "next" as const;
+    if (id === "not-started") return "muted" as const;
+    return "default" as const;
+  };
 
   const scrollToPeriodIndex = React.useCallback(
     (periodIndex: number, behavior: ScrollBehavior = "smooth") => {
@@ -632,11 +652,14 @@ export function TimelineCanvas({
             onNext={handleNext}
             onToday={() => scrollToToday()}
           />
-          <p className="ml-auto text-[10px] tabular-nums text-lume-text-muted">
-            <span className="font-medium text-lume-accent">{focusCount}</span>
-            {" focus · "}
-            <span className="font-medium text-foreground">{threadViews.length}</span>
-            {" threads"}
+          <p className="ml-auto hidden text-[10px] text-lume-text-muted sm:block">
+            <span className="font-medium text-foreground">{activeCount}</span> active
+            {focusCount > 0 ?
+              <>
+                {" · "}
+                <span className="font-medium text-lume-accent">{focusCount}</span> focus
+              </>
+            : null}
           </p>
         </div>
 
@@ -662,14 +685,26 @@ export function TimelineCanvas({
               style={{ height: CANVAS_RULER_H }}
             >
               <div
-                className="relative sticky left-0 z-40 shrink-0 border-r border-lume-border bg-lume-canvas-label px-2"
+                className="relative sticky left-0 z-40 flex shrink-0 flex-col justify-end border-r border-lume-border bg-lume-canvas-label pb-1.5 pl-2 pr-1"
                 style={{ width: labelRail.labelWidthPx, height: CANVAS_RULER_H }}
                 data-no-pan
               >
-                <div className="flex h-full items-end pb-2">
-                  <span className="text-[9px] font-medium tracking-[0.14em] text-lume-text-muted uppercase">
-                    Canvas
+                <div className="flex items-end justify-between gap-1 pe-0.5">
+                  <span className="text-[9px] font-medium tracking-wide text-lume-text-muted uppercase">
+                    Thread
                   </span>
+                  <Tooltip>
+                    <TooltipTrigger
+                      render={
+                        <span className="cursor-default text-[8px] font-semibold tracking-wide text-lume-accent uppercase">
+                          Focus
+                        </span>
+                      }
+                    />
+                    <TooltipContent side="bottom" className="max-w-[200px] text-pretty">
+                      {WORKFLOW_COPY.focus.hint}
+                    </TooltipContent>
+                  </Tooltip>
                 </div>
                 <LabelRailResizeHandle
                   onPointerDown={labelRail.onResizePointerDown}
@@ -709,20 +744,32 @@ export function TimelineCanvas({
                   onPointerUp={labelRail.onResizePointerUp}
                   onPointerCancel={labelRail.onResizePointerCancel}
                 />
-                {visibleThreadViews.map((tv, idx) => (
-                  <div
-                    key={tv.thread.id}
-                    className="absolute left-0 w-full"
-                    style={{ top: idx * CANVAS_LANE_PITCH + 8, height: CANVAS_LANE_PITCH - 4 }}
-                  >
-                    <FloatingThreadLabel
-                      tv={tv}
-                      busy={busy}
-                      onToggleToday={onToggleToday}
-                      onAddMiniTask={onAddMiniTask}
-                    />
-                  </div>
-                ))}
+                {laidOutLanes.map(({ item, top, height }) =>
+                  item.kind === "section" ?
+                    <div
+                      key={item.id}
+                      className="absolute left-0 w-full"
+                      style={{ top, height }}
+                    >
+                      <CanvasSectionLabel
+                        label={item.label}
+                        hint={item.hint}
+                        variant={sectionVariant(item.id)}
+                      />
+                    </div>
+                  : <div
+                      key={item.view.thread.id}
+                      className="absolute left-0 w-full"
+                      style={{ top, height }}
+                    >
+                      <FloatingThreadLabel
+                        tv={item.view}
+                        busy={busy}
+                        onToggleToday={onToggleToday}
+                        onAddMiniTask={onAddMiniTask}
+                      />
+                    </div>,
+                )}
               </div>
 
               <div
@@ -744,28 +791,30 @@ export function TimelineCanvas({
                         </p>
                       </div>
                     : (
-                      visibleThreadViews.map((tv, idx) => (
-                        <div
-                          key={tv.thread.id}
-                          className="absolute left-0"
-                          style={{
-                            top: idx * CANVAS_LANE_PITCH + 8,
-                            height: CANVAS_LANE_PITCH - 12,
-                            width: canvasScale.canvasWidthPx,
-                          }}
-                        >
-                          {isNotStartedStatus(tv.thread.status) ? null : (
-                            <ThreadStrand
-                              canvasScale={canvasScale}
-                              todayISO={todayISO}
-                              thread={tv.thread}
-                              dimmed={tv.dimmed}
-                              isSelectedToday={tv.isSelectedToday}
-                              onActivate={() => tv.onOpen()}
-                            />
-                          )}
-                        </div>
-                      ))
+                      laidOutLanes.map(({ item, top, height }) =>
+                        item.kind === "thread" ?
+                          <div
+                            key={item.view.thread.id}
+                            className="absolute left-0"
+                            style={{
+                              top,
+                              height: height - 4,
+                              width: canvasScale.canvasWidthPx,
+                            }}
+                          >
+                            {isNotStartedStatus(item.view.thread.status) ? null : (
+                              <ThreadStrand
+                                canvasScale={canvasScale}
+                                todayISO={todayISO}
+                                thread={item.view.thread}
+                                dimmed={item.view.dimmed}
+                                isSelectedToday={item.view.isSelectedToday}
+                                onActivate={() => item.view.onOpen()}
+                              />
+                            )}
+                          </div>
+                        : null,
+                      )
                     )}
                   </>
                 : null}

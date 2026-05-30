@@ -1,14 +1,20 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
-import type { CategoryRow, DailyLogRow, DashboardPayload, MiniTaskRow, ThreadRow, TodaySelectionRow } from "@/types/lume";
-import { showsOnTimeline } from "@/lib/thread-status";
+import type { CategoryRow, DailyLogRow, DashboardPayload, MiniTaskRow, ThreadCanvasPlacement, ThreadRow, TodaySelectionRow } from "@/types/lume";
+import { getLumeDayISO } from "@/lib/lume-day";
+import { compareTimelineThreadOrder, showsOnTimeline } from "@/lib/thread-status";
+import { canShowInDormantDock, compareDormantThreads, isOnCanvas, normalizeCanvasPlacement } from "@/lib/thread-placement";
+import { fetchUserSettings, toDayBoundary } from "@/lib/user-settings";
 import { getServerTimezone } from "@/lib/today-server";
 
 async function hydratePayload(
   supabase: SupabaseClient,
-  serverTodayISO: string,
   dateTimezone: string,
+  reference: Date,
 ): Promise<DashboardPayload> {
+  const userSettings = await fetchUserSettings(supabase);
+  const lumeDayISO = getLumeDayISO(dateTimezone, toDayBoundary(userSettings), reference);
+
   const [catRes, threadRes, miniTaskRes] = await Promise.all([
     supabase.from("categories").select("*").order("name", { ascending: true }),
     supabase.from("threads").select("*").order("due_date", { ascending: true }),
@@ -45,6 +51,10 @@ async function hydratePayload(
 
   const hydrateThread = (t: ThreadRow): ThreadRow => ({
     ...t,
+    canvas_placement: normalizeCanvasPlacement(
+      (t as ThreadRow & { canvas_placement?: ThreadCanvasPlacement }).canvas_placement,
+      t.status,
+    ),
     category:
       t.category_id ? (categoriesById.get(t.category_id) ?? null) : null,
   });
@@ -56,7 +66,13 @@ async function hydratePayload(
       return a.due_date.localeCompare(b.due_date);
     });
 
-  const timelineThreads = allThreadsHydrated.filter((t) => showsOnTimeline(t.status));
+  const timelineThreads = allThreadsHydrated
+    .filter((t) => showsOnTimeline(t.status) && isOnCanvas(t))
+    .sort(compareTimelineThreadOrder);
+
+  const dormantThreads = allThreadsHydrated
+    .filter((t) => canShowInDormantDock(t))
+    .sort(compareDormantThreads);
 
   const timelineIds = [...new Set(timelineThreads.map((t) => t.id))];
 
@@ -69,13 +85,13 @@ async function hydratePayload(
       supabase
         .from("today_selections")
         .select("*")
-        .eq("selected_date", serverTodayISO)
+        .eq("selected_date", lumeDayISO)
         .eq("is_selected", true)
         .in("thread_id", timelineIds),
       supabase
         .from("daily_logs")
         .select("*")
-        .eq("log_date", serverTodayISO)
+        .eq("log_date", lumeDayISO)
         .in("thread_id", timelineIds),
     ]);
 
@@ -88,20 +104,22 @@ async function hydratePayload(
   return {
     categories: categoriesRows,
     timelineThreads,
+    dormantThreads,
     allThreads: allThreadsHydrated,
     todaySelections,
     todayLogs,
     miniTasks,
-    serverTodayISO,
+    serverTodayISO: lumeDayISO,
     dateTimezone,
+    userSettings,
   };
 }
 
 export async function hydrateDashboardPayload(
   supabase: SupabaseClient,
-  serverTodayISO: string,
   dateTimezone?: string,
+  reference: Date = new Date(),
 ): Promise<DashboardPayload> {
   const tz = dateTimezone ?? getServerTimezone();
-  return hydratePayload(supabase, serverTodayISO, tz);
+  return hydratePayload(supabase, tz, reference);
 }

@@ -2,22 +2,25 @@
 
 import * as React from "react";
 
-import { getTodayISO } from "@/lib/today-server";
+import { getLumeDayISO } from "@/lib/lume-day";
+import type { DayBoundarySettings } from "@/types/lume";
 
 const DEFAULT_POLL_MS = 60_000;
 
 /**
- * Detects calendar-day rollover in the app timezone and triggers a refresh.
+ * Detects Lume-day rollover (custom boundary) and triggers a refresh.
  * Checks on an interval, when the tab becomes visible, and on window focus.
  */
 export function useDayRolloverRefresh({
   dateTimezone,
+  dayBoundary,
   activeTodayISO,
   onRollover,
   pollMs = DEFAULT_POLL_MS,
   enabled = true,
 }: {
   dateTimezone: string;
+  dayBoundary: DayBoundarySettings;
   activeTodayISO: string;
   onRollover: () => void | Promise<void>;
   pollMs?: number;
@@ -41,7 +44,7 @@ export function useDayRolloverRefresh({
     const check = () => {
       if (inFlightRef.current) return;
 
-      const nowToday = getTodayISO(dateTimezone);
+      const nowToday = getLumeDayISO(dateTimezone, dayBoundary);
       if (nowToday === activeTodayRef.current) return;
 
       inFlightRef.current = true;
@@ -66,5 +69,5 @@ export function useDayRolloverRefresh({
       document.removeEventListener("visibilitychange", onVisibility);
       window.removeEventListener("focus", onFocus);
     };
-  }, [dateTimezone, enabled, pollMs]);
+  }, [dateTimezone, dayBoundary, enabled, pollMs]);
 }
