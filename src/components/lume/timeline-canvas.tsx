@@ -1,7 +1,7 @@
 "use client";
 
 import { format } from "date-fns";
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { ChevronLeft, ChevronRight, Info } from "lucide-react";
 import * as React from "react";
 
 import { cn } from "@/lib/utils";
@@ -15,7 +15,7 @@ import {
   type TimelineScale,
   type TimelineUnit,
 } from "@/lib/timeline-scale";
-import { type TimelinePreset, threadTouchesTimelineRange } from "@/lib/timeline";
+import { type TimelinePreset, isoCalendarAdd, threadTouchesTimelineRange } from "@/lib/timeline";
 import { isNotStartedStatus } from "@/lib/thread-status";
 import { buildCanvasLanes, layoutCanvasLanes, WORKFLOW_COPY } from "@/lib/lume-workflow";
 
@@ -26,6 +26,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { CanvasSectionLabel } from "./canvas-section-label";
 import { ThreadInlineAddTaskButton } from "./thread-inline-add-task-button";
 import { ThreadLabelText } from "./thread-label-text";
+import { ThreadOpenTaskCount } from "./thread-open-task-count";
 import {
   CANVAS_LANE_PITCH,
   CANVAS_RULER_H,
@@ -36,8 +37,11 @@ import { useCanvasLabelWidth } from "./use-canvas-label-width";
 
 const PRESETS = ["month", "week", "year"] as const satisfies readonly TimelinePreset[];
 
-/** Padding from the track's left edge when snapping today into view. */
-const TODAY_TRACK_INSET_PX = 20;
+/** Padding from the track's left edge when snapping a date into view. */
+const TRACK_DATE_INSET_PX = 20;
+
+/** On first load (and preset change), anchor this many days before today at the left edge. */
+const DEFAULT_VIEW_LEAD_DAYS = 2;
 
 function utcNoonParts(iso: string) {
   return new Date(`${iso.split("T")[0]}T12:00:00.000Z`);
@@ -440,7 +444,13 @@ function FloatingThreadLabel({
   const openButton = (
     <button
       type="button"
-      aria-label={category ? `${tv.thread.name}, ${category.name}` : tv.thread.name}
+      aria-label={
+        tv.openTaskCount > 0
+          ? `${tv.thread.name}, ${tv.openTaskCount} open task${tv.openTaskCount === 1 ? "" : "s"}${category ? `, ${category.name}` : ""}`
+          : category
+            ? `${tv.thread.name}, ${category.name}`
+            : tv.thread.name
+      }
       onClick={() => tv.onOpen()}
       className={cn(
         "flex min-w-0 flex-1 items-start gap-1.5 text-left outline-none",
@@ -464,11 +474,14 @@ function FloatingThreadLabel({
         }}
       />
       <span className="min-w-0 flex-1">
-        <ThreadLabelText
-          text={tv.thread.name}
-          onTruncatedChange={onTruncatedChange}
-          className="text-[11px] text-foreground"
-        />
+        <span className="flex items-start gap-1">
+          <ThreadLabelText
+            text={tv.thread.name}
+            onTruncatedChange={onTruncatedChange}
+            className="min-w-0 flex-1 text-[11px] text-foreground"
+          />
+          <ThreadOpenTaskCount count={tv.openTaskCount} className="mt-0.5 shrink-0" />
+        </span>
         {category ?
           <ThreadCategoryTag name={category.name} color={category.color} />
         : null}
@@ -595,7 +608,20 @@ export function TimelineCanvas({
       const el = scrollRef.current;
       if (!el || viewportWidthPx <= 0) return;
       el.scrollTo({
-        left: scrollLeftForDateAtTrackStart(todayISO, canvasScale, TODAY_TRACK_INSET_PX),
+        left: scrollLeftForDateAtTrackStart(todayISO, canvasScale, TRACK_DATE_INSET_PX),
+        behavior,
+      });
+    },
+    [canvasScale, todayISO, viewportWidthPx],
+  );
+
+  const scrollToDefaultView = React.useCallback(
+    (behavior: ScrollBehavior = "smooth") => {
+      const el = scrollRef.current;
+      if (!el || viewportWidthPx <= 0) return;
+      const anchorISO = isoCalendarAdd(todayISO, -DEFAULT_VIEW_LEAD_DAYS);
+      el.scrollTo({
+        left: scrollLeftForDateAtTrackStart(anchorISO, canvasScale, TRACK_DATE_INSET_PX),
         behavior,
       });
     },
@@ -612,10 +638,10 @@ export function TimelineCanvas({
     if (presetChanged) presetRef.current = preset;
 
     if (presetChanged || !didInitialScroll.current) {
-      scrollToToday("auto");
+      scrollToDefaultView("auto");
       didInitialScroll.current = true;
     }
-  }, [preset, viewportWidthPx, scrollToToday]);
+  }, [preset, viewportWidthPx, scrollToDefaultView]);
 
   const handlePrev = React.useCallback(() => {
     const el = scrollRef.current;
@@ -652,15 +678,38 @@ export function TimelineCanvas({
             onNext={handleNext}
             onToday={() => scrollToToday()}
           />
-          <p className="ml-auto hidden text-[10px] text-lume-text-muted sm:block">
-            <span className="font-medium text-foreground">{activeCount}</span> active
-            {focusCount > 0 ?
-              <>
-                {" · "}
-                <span className="font-medium text-lume-accent">{focusCount}</span> focus
-              </>
-            : null}
-          </p>
+          <div className="ml-auto hidden items-center gap-1 sm:flex">
+            <p className="text-[10px] text-lume-text-muted">
+              <span className="font-medium text-foreground">{activeCount}</span> active
+              {focusCount > 0 ?
+                <>
+                  {" · "}
+                  <span className="font-medium text-lume-accent">{focusCount}</span> focus
+                </>
+              : null}
+            </p>
+            <Tooltip>
+              <TooltipTrigger
+                render={
+                  <button
+                    type="button"
+                    className="rounded p-0.5 text-lume-text-muted outline-none hover:text-foreground focus-visible:ring-1 focus-visible:ring-lume-focus"
+                    aria-label="About active and focus threads"
+                  >
+                    <Info className="size-3" aria-hidden />
+                  </button>
+                }
+              />
+              <TooltipContent side="bottom" align="end" className="max-w-[240px] space-y-1.5 text-pretty">
+                <p>
+                  {WORKFLOW_COPY.active.label}: {WORKFLOW_COPY.active.hint}
+                </p>
+                <p>
+                  {WORKFLOW_COPY.focus.label}: {WORKFLOW_COPY.focus.hint}
+                </p>
+              </TooltipContent>
+            </Tooltip>
+          </div>
         </div>
 
         <div

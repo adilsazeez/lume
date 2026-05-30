@@ -88,28 +88,3 @@ export function DormantThreadItem({
     </div>
   );
 }
-
-export function DormantThreadChip({
-  thread,
-  onClick,
-}: {
-  thread: ThreadRow;
-  onClick?: () => void;
-}) {
-  const notStarted = isNotStartedStatus(thread.status);
-  return (
-    <button
-      type="button"
-      title={`${thread.name} · ${threadStatusLabel(thread.status)}`}
-      onClick={onClick}
-      className={cn(
-        "max-w-[88px] truncate rounded-full border px-2 py-0.5 text-[10px]",
-        notStarted
-          ? "border-amber-400/40 bg-amber-500/12 text-amber-100/90"
-          : "border-lume-border bg-lume-surface/70 text-foreground/85",
-      )}
-    >
-      {thread.name}
-    </button>
-  );
-}

@@ -21,7 +21,9 @@ import { ThreadFormDialog } from "@/components/lume/thread-form-dialog";
 import { TimelineCanvas } from "@/components/lume/timeline-canvas";
 import type { TimelineThreadView } from "@/components/lume/thread-timeline";
 
+import { appendProgressNote } from "@/lib/daily-logs";
 import { hydrateDashboardPayload } from "@/lib/hydrate-dashboard";
+import { countOpenMiniTasksByThread, isOpenMiniTask, sortMiniTasks } from "@/lib/mini-tasks";
 import { createBrowserSupabase } from "@/lib/supabase/browser";
 import { defaultCanvasPlacement, isOnCanvas, splitThreadLists } from "@/lib/thread-placement";
 import { isNotStartedStatus, placeholderThreadDates } from "@/lib/thread-status";
@@ -100,6 +102,7 @@ function DashboardBody({ initial }: { initial: DashboardPayload }) {
     undo: PlacementUndo | null;
   } | null>(null);
   const placementUndoRef = React.useRef<PlacementUndo | null>(null);
+  const overlayShellRef = React.useRef<HTMLDivElement>(null);
 
   React.useEffect(() => {
     if (!placementToast) return;
@@ -148,6 +151,11 @@ function DashboardBody({ initial }: { initial: DashboardPayload }) {
     });
   }, []);
 
+  const openTaskCountsByThread = React.useMemo(
+    () => countOpenMiniTasksByThread(dash.miniTasks),
+    [dash.miniTasks],
+  );
+
   const threadViews = React.useMemo(() => {
     const views = dash.timelineThreads.map((thread: ThreadRow): TimelineThreadView => {
       const dim =
@@ -160,9 +168,9 @@ function DashboardBody({ initial }: { initial: DashboardPayload }) {
         dimmed: Boolean(dim),
         glow: Boolean(!dim),
         isSelectedToday: selectedToday.has(thread.id),
+        openTaskCount: openTaskCountsByThread.get(thread.id) ?? 0,
         onOpen: () => {
-          const noteSeed = dash.todayLogs.find((l) => l.thread_id === thread.id)?.note ?? "";
-          setDetailDraft(noteSeed);
+          setDetailDraft("");
           setDetailId(thread.id);
         },
       };
@@ -183,7 +191,7 @@ function DashboardBody({ initial }: { initial: DashboardPayload }) {
     });
   }, [
     dash.timelineThreads,
-    dash.todayLogs,
+    openTaskCountsByThread,
     todayFocusActive,
     selectionCount,
     selectedToday,
@@ -192,15 +200,20 @@ function DashboardBody({ initial }: { initial: DashboardPayload }) {
 
   const detailRecord = dash.allThreads?.find((t) => t.id === detailId) ?? null;
 
+  const detailThreadTasks = React.useMemo(() => {
+    if (!detailId) return [];
+    const open = dash.miniTasks.filter((t) => t.thread_id === detailId && isOpenMiniTask(t.status));
+    return sortMiniTasks(open, dash.serverTodayISO);
+  }, [detailId, dash.miniTasks, dash.serverTodayISO]);
+
   const openThreadDetail = React.useCallback(
     (threadId: string) => {
       const thread = dash.allThreads?.find((t) => t.id === threadId);
       if (!thread) return;
-      const noteSeed = dash.todayLogs.find((l) => l.thread_id === threadId)?.note ?? "";
-      setDetailDraft(noteSeed);
+      setDetailDraft("");
       setDetailId(threadId);
     },
-    [dash.allThreads, dash.todayLogs],
+    [dash.allThreads],
   );
 
   const loadDetailLogs = React.useCallback(async (threadId: string) => {
@@ -500,6 +513,12 @@ function DashboardBody({ initial }: { initial: DashboardPayload }) {
     const draftSnapshot = detailDraft;
     const now = new Date().toISOString();
 
+    const existingToday =
+      detailLogs.find((l) => l.log_date === logDate)?.note ??
+      dash.todayLogs.find((l) => l.thread_id === threadId)?.note ??
+      "";
+    const noteToSave = appendProgressNote(existingToday, trimmed);
+
     setDetailDraft("");
 
     setDetailLogs((prev) => {
@@ -508,7 +527,7 @@ function DashboardBody({ initial }: { initial: DashboardPayload }) {
         id: existing?.id ?? `pending-${logDate}`,
         thread_id: threadId,
         log_date: logDate,
-        note: trimmed,
+        note: noteToSave,
         created_at: existing?.created_at ?? now,
         updated_at: now,
       };
@@ -527,7 +546,7 @@ function DashboardBody({ initial }: { initial: DashboardPayload }) {
           {
             thread_id: threadId,
             log_date: logDate,
-            note: trimmed,
+            note: noteToSave,
           },
           { onConflict: "thread_id,log_date" },
         )
@@ -860,65 +879,34 @@ function DashboardBody({ initial }: { initial: DashboardPayload }) {
           }}
         />
 
-        <div className="flex min-h-0 min-w-0 flex-1 gap-2 overflow-hidden px-3 pb-3 pt-2 font-sans">
-          <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-2 overflow-hidden">
-            <LumeWorkflowIntro
-              activeCount={dash.timelineThreads.length}
-              focusCount={selectionCount}
-              focusViewOn={todayFocusActive}
-              onAddThread={() => openComposer()}
-            />
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-2 overflow-hidden px-3 pb-3 pt-2 font-sans">
+          <LumeWorkflowIntro
+            activeCount={dash.timelineThreads.length}
+            focusCount={selectionCount}
+            focusViewOn={todayFocusActive}
+            onAddThread={() => openComposer()}
+          />
 
+          <div ref={overlayShellRef} className="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
             {hasAnyThreads ?
-              <div className="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
-                <DroppableCanvasZone disabled={busy} onDropActivate={(id) => void activateThread(id)}>
-                  {dash.timelineThreads.length === 0 ?
-                    <div className="flex min-h-[280px] flex-1 flex-col items-center justify-center rounded-xl border border-dashed border-lume-border-strong bg-lume-surface/50 px-6 py-12 text-center">
-                      <p className="text-[12px] text-muted-foreground">Drag from Dormant to activate a thread.</p>
-                    </div>
-                  : (
-                    <TimelineCanvas
-                      threadViews={threadViews}
-                      todayISO={dash.serverTodayISO}
-                      busy={busy}
-                      focusViewOn={todayFocusActive}
-                      focusCount={selectionCount}
-                      activeCount={activeThreadCount}
-                      onToggleToday={(threadId, next) => toggleToday(threadId, next)}
-                      onAddMiniTask={(threadId) => openMiniTaskComposer(threadId)}
-                    />
-                  )}
-                </DroppableCanvasZone>
-
-                {(dash.dormantThreads ?? []).length > 0 ?
-                  <div className="pointer-events-none absolute inset-x-0 bottom-3 z-30 flex justify-end px-3">
-                    <DormantThreadsDock
-                      threads={dash.dormantThreads ?? []}
-                      busy={busy}
-                      onActivate={(id) => void activateThread(id)}
-                      onOpenThread={openThreadDetail}
-                      onDropToPark={(id) => {
-                        const t = dash.allThreads?.find((x) => x.id === id);
-                        if (t && isOnCanvas(t)) void parkThread(id);
-                      }}
-                    />
+              <DroppableCanvasZone disabled={busy} onDropActivate={(id) => void activateThread(id)}>
+                {dash.timelineThreads.length === 0 ?
+                  <div className="flex min-h-[280px] flex-1 flex-col items-center justify-center rounded-xl border border-dashed border-lume-border-strong bg-lume-surface/50 px-6 py-12 text-center">
+                    <p className="text-[12px] text-muted-foreground">Drag from Dormant to activate a thread.</p>
                   </div>
-                : null}
-
-                {placementToast ?
-                  <div className="pointer-events-none absolute inset-x-0 top-3 z-40 flex justify-center px-4">
-                    <PlacementToast
-                      className="pointer-events-auto max-w-md"
-                      message={placementToast.message}
-                      onUndo={placementToast.undo ? () => void undoPlacement() : undefined}
-                      onDismiss={() => {
-                        setPlacementToast(null);
-                        placementUndoRef.current = null;
-                      }}
-                    />
-                  </div>
-                : null}
-              </div>
+                : (
+                  <TimelineCanvas
+                    threadViews={threadViews}
+                    todayISO={dash.serverTodayISO}
+                    busy={busy}
+                    focusViewOn={todayFocusActive}
+                    focusCount={selectionCount}
+                    activeCount={activeThreadCount}
+                    onToggleToday={(threadId, next) => toggleToday(threadId, next)}
+                    onAddMiniTask={(threadId) => openMiniTaskComposer(threadId)}
+                  />
+                )}
+              </DroppableCanvasZone>
             : (
               <div className="flex flex-1 flex-col items-center justify-center rounded-2xl border border-dashed border-lume-border-strong bg-lume-surface px-8 py-16 text-center">
                 <p className="mb-1 text-sm font-medium text-foreground">Your life, as threads</p>
@@ -931,21 +919,52 @@ function DashboardBody({ initial }: { initial: DashboardPayload }) {
                 </Button>
               </div>
             )}
-          </div>
 
-          <MiniTaskPanel
-            tasks={dash.miniTasks}
-            threads={threadPickerRows}
-            todayISO={dash.serverTodayISO}
-            busy={busy}
-            onStatusChange={(taskId, status) => void updateMiniTaskStatus(taskId, status)}
-            onTitleChange={(taskId, title) => void updateMiniTaskTitle(taskId, title)}
-            onNoteChange={(taskId, note) => void updateMiniTaskNote(taskId, note)}
-            onDueDateChange={(taskId, dueDate) => void updateMiniTaskDueDate(taskId, dueDate)}
-            onPriorityChange={(taskId, priority) => void updateMiniTaskPriority(taskId, priority)}
-            onDelete={(taskId) => void deleteMiniTask(taskId)}
-            onQuickAdd={(p) => createMiniTask(p)}
-          />
+            {placementToast && hasAnyThreads ?
+              <div className="pointer-events-none absolute inset-x-0 top-3 z-[60] flex justify-center px-4">
+                <PlacementToast
+                  className="pointer-events-auto max-w-md"
+                  message={placementToast.message}
+                  onUndo={placementToast.undo ? () => void undoPlacement() : undefined}
+                  onDismiss={() => {
+                    setPlacementToast(null);
+                    placementUndoRef.current = null;
+                  }}
+                />
+              </div>
+            : null}
+
+            <div className="pointer-events-none absolute inset-0 z-50">
+              <MiniTaskPanel
+                boundsRef={overlayShellRef}
+                tasks={dash.miniTasks}
+                threads={threadPickerRows}
+                todayISO={dash.serverTodayISO}
+                busy={busy}
+                onStatusChange={(taskId, status) => void updateMiniTaskStatus(taskId, status)}
+                onTitleChange={(taskId, title) => void updateMiniTaskTitle(taskId, title)}
+                onNoteChange={(taskId, note) => void updateMiniTaskNote(taskId, note)}
+                onDueDateChange={(taskId, dueDate) => void updateMiniTaskDueDate(taskId, dueDate)}
+                onPriorityChange={(taskId, priority) => void updateMiniTaskPriority(taskId, priority)}
+                onDelete={(taskId) => void deleteMiniTask(taskId)}
+                onQuickAdd={(p) => createMiniTask(p)}
+              />
+
+              {(dash.dormantThreads ?? []).length > 0 && hasAnyThreads ?
+                <DormantThreadsDock
+                  boundsRef={overlayShellRef}
+                  threads={dash.dormantThreads ?? []}
+                  busy={busy}
+                  onActivate={(id) => void activateThread(id)}
+                  onOpenThread={openThreadDetail}
+                  onDropToPark={(id) => {
+                    const t = dash.allThreads?.find((x) => x.id === id);
+                    if (t && isOnCanvas(t)) void parkThread(id);
+                  }}
+                />
+              : null}
+            </div>
+          </div>
         </div>
       </div>
 
@@ -967,6 +986,13 @@ function DashboardBody({ initial }: { initial: DashboardPayload }) {
           if (!detailRecord) return;
           await toggleToday(detailRecord.id, v);
         }}
+        threadTasks={detailThreadTasks}
+        onMiniTaskStatusChange={(taskId, status) => void updateMiniTaskStatus(taskId, status)}
+        onMiniTaskTitleChange={(taskId, title) => void updateMiniTaskTitle(taskId, title)}
+        onMiniTaskNoteChange={(taskId, note) => void updateMiniTaskNote(taskId, note)}
+        onMiniTaskDueDateChange={(taskId, dueDate) => void updateMiniTaskDueDate(taskId, dueDate)}
+        onMiniTaskPriorityChange={(taskId, priority) => void updateMiniTaskPriority(taskId, priority)}
+        onMiniTaskDelete={(taskId) => void deleteMiniTask(taskId)}
         onClose={() => setDetailId(null)}
         onEditThread={() => {
           if (!detailRecord) return;

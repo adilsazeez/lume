@@ -17,6 +17,7 @@ export function MiniTaskList({
   onPriorityChange,
   onDelete,
   emptyLabel = "No tasks here.",
+  hideThreadLabel = false,
 }: {
   tasks: MiniTaskRow[];
   todayISO: string;
@@ -30,6 +31,7 @@ export function MiniTaskList({
   onPriorityChange?: (taskId: string, priority: MiniTaskPriority | null) => void;
   onDelete?: (taskId: string) => void;
   emptyLabel?: string;
+  hideThreadLabel?: boolean;
 }) {
   if (tasks.length === 0) {
     return (
@@ -53,6 +55,7 @@ export function MiniTaskList({
           onDueDateChange={onDueDateChange}
           onPriorityChange={onPriorityChange}
           onDelete={onDelete}
+          hideThreadLabel={hideThreadLabel}
         />
       ))}
     </div>

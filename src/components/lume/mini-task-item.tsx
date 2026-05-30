@@ -35,6 +35,7 @@ export function MiniTaskItem({
   onDueDateChange,
   onPriorityChange,
   onDelete,
+  hideThreadLabel = false,
 }: {
   task: MiniTaskRow;
   todayISO: string;
@@ -47,6 +48,7 @@ export function MiniTaskItem({
   onDueDateChange?: (taskId: string, dueDate: string | null) => void;
   onPriorityChange?: (taskId: string, priority: MiniTaskPriority | null) => void;
   onDelete?: (taskId: string) => void;
+  hideThreadLabel?: boolean;
 }) {
   const titleRef = React.useRef<HTMLInputElement>(null);
   const noteRef = React.useRef<HTMLTextAreaElement>(null);
@@ -225,15 +227,22 @@ export function MiniTaskItem({
                 </select>
               </div>
 
-              <div className="flex min-w-0 items-center justify-between gap-2 pt-0.5">
-                <div className="flex min-w-0 items-center gap-1">
-                  <span
-                    aria-hidden
-                    className="size-1.5 shrink-0 rounded-full"
-                    style={{ backgroundColor: threadColor, opacity: 0.85 }}
-                  />
-                  <EllipsisText text={threadName} lines={2} className="min-w-0 text-[10px] text-muted-foreground/65" />
-                </div>
+              <div
+                className={cn(
+                  "flex min-w-0 items-center gap-2 pt-0.5",
+                  hideThreadLabel ? "justify-end" : "justify-between",
+                )}
+              >
+                {!hideThreadLabel ?
+                  <div className="flex min-w-0 items-center gap-1">
+                    <span
+                      aria-hidden
+                      className="size-1.5 shrink-0 rounded-full"
+                      style={{ backgroundColor: threadColor, opacity: 0.85 }}
+                    />
+                    <EllipsisText text={threadName} lines={2} className="min-w-0 text-[10px] text-muted-foreground/65" />
+                  </div>
+                : null}
 
                 <button
                   type="button"
@@ -275,14 +284,16 @@ export function MiniTaskItem({
               : null}
 
               <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5">
-                <span className="inline-flex min-w-0 max-w-full items-center gap-1">
-                  <span
-                    aria-hidden
-                    className="size-1.5 shrink-0 rounded-full"
-                    style={{ backgroundColor: threadColor, opacity: isDone ? 0.4 : 0.85 }}
-                  />
-                  <EllipsisText text={threadName} lines={2} className="min-w-0 text-[10px] text-muted-foreground/75" />
-                </span>
+                {!hideThreadLabel ?
+                  <span className="inline-flex min-w-0 max-w-full items-center gap-1">
+                    <span
+                      aria-hidden
+                      className="size-1.5 shrink-0 rounded-full"
+                      style={{ backgroundColor: threadColor, opacity: isDone ? 0.4 : 0.85 }}
+                    />
+                    <EllipsisText text={threadName} lines={2} className="min-w-0 text-[10px] text-muted-foreground/75" />
+                  </span>
+                : null}
 
                 {dueLabel ?
                   <span className="text-[10px] tabular-nums text-muted-foreground/60">{dueLabel}</span>

@@ -13,6 +13,20 @@ export function miniTaskStatusLabel(status: MiniTaskStatus) {
   return "Done";
 }
 
+export function isOpenMiniTask(status: MiniTaskStatus): boolean {
+  return status !== "done";
+}
+
+/** Open (not done) mini-task counts keyed by parent thread id. */
+export function countOpenMiniTasksByThread(tasks: MiniTaskRow[]): Map<string, number> {
+  const counts = new Map<string, number>();
+  for (const task of tasks) {
+    if (!isOpenMiniTask(task.status)) continue;
+    counts.set(task.thread_id, (counts.get(task.thread_id) ?? 0) + 1);
+  }
+  return counts;
+}
+
 export function miniTaskDueUrgency(
   dueDate: string | null | undefined,
   todayISO: string,

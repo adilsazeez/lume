@@ -22,6 +22,7 @@ export type TimelineThreadView = {
   dimmed: boolean;
   glow: boolean;
   isSelectedToday: boolean;
+  openTaskCount: number;
   onOpen: () => void;
 };
 

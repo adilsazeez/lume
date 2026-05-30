@@ -4,8 +4,9 @@ import * as React from "react";
 import { format, parseISO } from "date-fns";
 import { PencilIcon, Trash2, Moon } from "lucide-react";
 
-import type { DailyLogRow, ThreadRow } from "@/types/lume";
+import type { DailyLogRow, MiniTaskPriority, MiniTaskRow, MiniTaskStatus, ThreadRow } from "@/types/lume";
 
+import { MiniTaskList } from "@/components/lume/mini-task-list";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -128,6 +129,13 @@ export function ThreadDetailSheet(props: {
   onDeleteThread: () => Promise<void>;
   onParkToDormant?: () => Promise<void>;
   showParkAction?: boolean;
+  threadTasks: MiniTaskRow[];
+  onMiniTaskStatusChange: (taskId: string, status: MiniTaskStatus) => void;
+  onMiniTaskTitleChange: (taskId: string, title: string) => void;
+  onMiniTaskNoteChange: (taskId: string, note: string | null) => void;
+  onMiniTaskDueDateChange: (taskId: string, dueDate: string | null) => void;
+  onMiniTaskPriorityChange: (taskId: string, priority: MiniTaskPriority | null) => void;
+  onMiniTaskDelete: (taskId: string) => void;
 }) {
   const {
     open,
@@ -145,7 +153,20 @@ export function ThreadDetailSheet(props: {
     onDeleteThread,
     onParkToDormant,
     showParkAction = false,
+    threadTasks,
+    onMiniTaskStatusChange,
+    onMiniTaskTitleChange,
+    onMiniTaskNoteChange,
+    onMiniTaskDueDateChange,
+    onMiniTaskPriorityChange,
+    onMiniTaskDelete,
   } = props;
+
+  const [expandedTaskId, setExpandedTaskId] = React.useState<string | null>(null);
+
+  React.useEffect(() => {
+    setExpandedTaskId(null);
+  }, [thread?.id]);
 
   if (!thread) return null;
 
@@ -276,6 +297,12 @@ export function ThreadDetailSheet(props: {
                   aria-label="Progress note"
                   value={noteDraft}
                   onChange={(event) => onNoteDraftChange(event.target.value)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter" && !event.shiftKey) {
+                      event.preventDefault();
+                      event.currentTarget.form?.requestSubmit();
+                    }
+                  }}
                 />
 
                 <div className="flex justify-end">
@@ -285,7 +312,27 @@ export function ThreadDetailSheet(props: {
                 </div>
               </form>
 
+              <div className="shrink-0 space-y-1.5">
+                <p className="text-[11px] font-medium text-foreground">Tasks</p>
+                <MiniTaskList
+                  tasks={threadTasks}
+                  todayISO={todayISO}
+                  busy={busy}
+                  expandedTaskId={expandedTaskId}
+                  onExpandTask={setExpandedTaskId}
+                  onStatusChange={onMiniTaskStatusChange}
+                  onTitleChange={onMiniTaskTitleChange}
+                  onNoteChange={onMiniTaskNoteChange}
+                  onDueDateChange={onMiniTaskDueDateChange}
+                  onPriorityChange={onMiniTaskPriorityChange}
+                  onDelete={onMiniTaskDelete}
+                  hideThreadLabel
+                  emptyLabel="No open tasks."
+                />
+              </div>
+
               <div className="flex min-h-0 flex-1 flex-col overflow-hidden pt-1">
+                <p className="mb-1.5 shrink-0 text-[11px] font-medium text-foreground">Progress</p>
                 <ProgressHistoryFeed
                   className="min-h-0 flex-1"
                   logs={progressLogs}

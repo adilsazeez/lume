@@ -1,16 +1,22 @@
 "use client";
 
 import * as React from "react";
+import { CheckSquare, GripVertical, Info } from "lucide-react";
 
 import type { MiniTaskFilter, MiniTaskPriority, MiniTaskRow, MiniTaskStatus, ThreadRow } from "@/types/lume";
 
 import { MiniTaskList } from "@/components/lume/mini-task-list";
 import { QuickAddMiniTask } from "@/components/lume/quick-add-mini-task";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 
 import { filterMiniTasks, sortMiniTasks } from "@/lib/mini-tasks";
 import { WORKFLOW_COPY } from "@/lib/lume-workflow";
 import { isOnCanvas } from "@/lib/thread-placement";
 import { cn } from "@/lib/utils";
+
+import { useDraggablePanel } from "@/hooks/use-draggable-panel";
+
+const MINI_TASKS_POSITION_KEY = "lume:mini-tasks-dock-position";
 
 const FILTERS: { key: MiniTaskFilter; label: string }[] = [
   { key: "all", label: "All" },
@@ -24,6 +30,7 @@ export function MiniTaskPanel({
   threads,
   todayISO,
   busy,
+  boundsRef,
   onStatusChange,
   onTitleChange,
   onNoteChange,
@@ -36,6 +43,7 @@ export function MiniTaskPanel({
   threads: ThreadRow[];
   todayISO: string;
   busy?: boolean;
+  boundsRef: React.RefObject<HTMLElement | null>;
   onStatusChange: (taskId: string, status: MiniTaskStatus) => void;
   onTitleChange: (taskId: string, title: string) => void;
   onNoteChange: (taskId: string, note: string | null) => void;
@@ -47,6 +55,13 @@ export function MiniTaskPanel({
   const [filter, setFilter] = React.useState<MiniTaskFilter>("today");
   const [expandedTaskId, setExpandedTaskId] = React.useState<string | null>(null);
   const listRef = React.useRef<HTMLDivElement>(null);
+  const panelRef = React.useRef<HTMLElement>(null);
+  const { position, isDragging, dragHandleProps } = useDraggablePanel({
+    boundsRef,
+    panelRef,
+    storageKey: MINI_TASKS_POSITION_KEY,
+    defaultCorner: "top-right",
+  });
 
   React.useEffect(() => {
     const onPointerDown = (event: PointerEvent) => {
@@ -90,8 +105,6 @@ export function MiniTaskPanel({
     }
   }, [visibleTasks, expandedTaskId]);
 
-  const openCount = tasks.filter((t) => t.status !== "done").length;
-  const doneCount = tasks.filter((t) => t.status === "done").length;
   const isCompletedTab = filter === "done";
 
   const emptyLabels: Record<MiniTaskFilter, string> = {
@@ -103,28 +116,56 @@ export function MiniTaskPanel({
 
   return (
     <aside
+      ref={panelRef}
       aria-label="Mini-tasks"
+      data-no-pan
+      style={position ? { left: position.x, top: position.y } : undefined}
       className={cn(
-        "flex min-h-0 w-[clamp(15rem,22vw,18rem)] shrink-0 flex-col overflow-hidden",
-        "rounded-md border border-lume-border-strong bg-lume-panel",
+        "pointer-events-auto absolute z-50 flex w-[min(100%,20rem)] flex-col overflow-hidden rounded-xl border shadow-lg backdrop-blur-md",
+        "border-lume-border-strong bg-lume-panel/92",
+        "shadow-[0_8px_32px_rgb(0_0_0_/_0.35),inset_0_1px_0_rgb(255_255_255_/_0.06)]",
+        !position && "top-3 right-3 opacity-0",
+        position && "opacity-100",
+        isDragging && "select-none",
       )}
     >
-      <div className="shrink-0 border-b border-lume-border-strong bg-lume-panel/95 px-3 py-2">
-        <div className="flex items-start justify-between gap-2">
-          <div className="min-w-0">
-            <h2 className="text-[11px] font-medium tracking-[0.08em] text-foreground uppercase">Mini-tasks</h2>
-            <p className="mt-0.5 text-[10px] leading-snug text-lume-text-muted">{WORKFLOW_COPY.miniTasks.hint}</p>
+      <div className="shrink-0 border-b border-lume-border/80 bg-lume-panel/95 px-2 py-2">
+        <div className="flex items-center gap-1">
+          <div
+            {...dragHandleProps}
+            className={cn(
+              "flex min-w-0 flex-1 touch-none items-center gap-1.5",
+              isDragging ? "cursor-grabbing" : "cursor-grab",
+            )}
+          >
+            <GripVertical className="size-3.5 shrink-0 text-lume-text-muted/55" aria-hidden />
+            <CheckSquare className="size-3.5 shrink-0 text-lume-accent/85" aria-hidden />
+            <div className="min-w-0 flex-1">
+              <p className="text-[11px] font-medium tracking-[0.08em] text-foreground uppercase">Mini-tasks</p>
+            </div>
+            <p className="flex shrink-0 items-baseline gap-1 pr-1 text-[10px] tabular-nums text-lume-text-secondary">
+              <span className="inline-block min-w-[1.5rem] text-right font-medium text-foreground">
+                {visibleTasks.length}
+              </span>
+              <span className="inline-block w-[2.125rem]">tasks</span>
+            </p>
           </div>
-          <span className="text-[10px] tabular-nums text-lume-text-secondary">
-            {isCompletedTab ?
-              <>
-                <span className="font-medium text-foreground">{doneCount}</span> completed
-              </>
-            : <>
-                <span className="font-medium text-foreground">{openCount}</span> open
-              </>
-            }
-          </span>
+          <Tooltip>
+            <TooltipTrigger
+              render={
+                <button
+                  type="button"
+                  className="shrink-0 rounded p-0.5 text-lume-text-muted outline-none hover:text-foreground focus-visible:ring-1 focus-visible:ring-lume-focus"
+                  aria-label="About mini-tasks"
+                >
+                  <Info className="size-3" aria-hidden />
+                </button>
+              }
+            />
+            <TooltipContent side="top" align="end" className="max-w-[220px] text-pretty">
+              {WORKFLOW_COPY.miniTasks.hint}
+            </TooltipContent>
+          </Tooltip>
         </div>
 
         <div
@@ -156,7 +197,10 @@ export function MiniTaskPanel({
         <QuickAddMiniTask threads={activeThreads} busy={busy} onSubmit={onQuickAdd} />
       )}
 
-      <div ref={listRef} className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain px-1.5 py-2 scrollbar-y-hover">
+      <div
+        ref={listRef}
+        className="max-h-[min(40vh,280px)] overflow-y-auto overscroll-y-contain px-1.5 py-2 scrollbar-y-hover"
+      >
         <MiniTaskList
           tasks={visibleTasks}
           todayISO={todayISO}
