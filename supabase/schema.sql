@@ -124,10 +124,9 @@ drop policy if exists mini_tasks_public_all on mini_tasks;
 create policy mini_tasks_public_all
   on mini_tasks for all using (true) with check (true);
 
--- Local single-user day boundary (Lume "day" can extend past midnight)
+-- Local single-user focus day boundary (when focus threads reset)
 create table if not exists user_settings (
   id uuid primary key default gen_random_uuid(),
-  day_start_time time not null default '00:00',
   day_end_time time not null default '03:00',
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
@@ -144,6 +143,6 @@ drop policy if exists user_settings_public_all on user_settings;
 create policy user_settings_public_all
   on user_settings for all using (true) with check (true);
 
-insert into user_settings (id, day_start_time, day_end_time)
-values ('00000000-0000-4000-8000-000000000001', '00:00', '03:00')
+insert into user_settings (id, day_end_time)
+values ('00000000-0000-4000-8000-000000000001', '03:00')
 on conflict (id) do nothing;

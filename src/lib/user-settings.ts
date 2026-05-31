@@ -1,6 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
-import { DEFAULT_DAY_BOUNDARY, normalizeTimeOfDay } from "@/lib/lume-day";
+import { DEFAULT_DAY_END_TIME, normalizeTimeOfDay } from "@/lib/lume-day";
 import type {
   DayBoundarySettings,
   PanelPosition,
@@ -44,8 +44,7 @@ export function defaultUserSettingsRow(): UserSettingsRow {
   const now = new Date().toISOString();
   return {
     id: LOCAL_USER_SETTINGS_ID,
-    day_start_time: DEFAULT_DAY_BOUNDARY.day_start_time,
-    day_end_time: DEFAULT_DAY_BOUNDARY.day_end_time,
+    day_end_time: DEFAULT_DAY_END_TIME,
     panel_positions: null,
     created_at: now,
     updated_at: now,
@@ -55,8 +54,7 @@ export function defaultUserSettingsRow(): UserSettingsRow {
 export function normalizeUserSettingsRow(raw: Record<string, unknown>): UserSettingsRow {
   return {
     id: String(raw.id ?? LOCAL_USER_SETTINGS_ID),
-    day_start_time: normalizeTimeOfDay(String(raw.day_start_time ?? DEFAULT_DAY_BOUNDARY.day_start_time)),
-    day_end_time: normalizeTimeOfDay(String(raw.day_end_time ?? DEFAULT_DAY_BOUNDARY.day_end_time)),
+    day_end_time: normalizeTimeOfDay(String(raw.day_end_time ?? DEFAULT_DAY_END_TIME)),
     panel_positions: normalizePanelPositions(raw.panel_positions),
     created_at: String(raw.created_at ?? new Date().toISOString()),
     updated_at: String(raw.updated_at ?? new Date().toISOString()),
@@ -64,10 +62,7 @@ export function normalizeUserSettingsRow(raw: Record<string, unknown>): UserSett
 }
 
 export function toDayBoundary(settings: UserSettingsRow): DayBoundarySettings {
-  return {
-    day_start_time: settings.day_start_time,
-    day_end_time: settings.day_end_time,
-  };
+  return { day_end_time: settings.day_end_time };
 }
 
 export async function fetchUserSettings(supabase: SupabaseClient): Promise<UserSettingsRow> {
@@ -91,7 +86,6 @@ export function toPostgresTime(hhmm: string): string {
 function userSettingsUpsertBody(settings: UserSettingsRow) {
   return {
     id: settings.id,
-    day_start_time: toPostgresTime(settings.day_start_time),
     day_end_time: toPostgresTime(settings.day_end_time),
     panel_positions: settings.panel_positions,
   };

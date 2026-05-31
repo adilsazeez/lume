@@ -38,3 +38,35 @@ export function getServerTodayISO(): string {
 export function getTodayISO(timeZone: string, reference: Date = new Date()): string {
   return isoDateInTimeZone(reference, timeZone);
 }
+
+/** Browser IANA timezone; falls back when `Intl` is unavailable (SSR). */
+export function getBrowserTimezone(fallback?: string): string {
+  if (typeof Intl === "undefined") {
+    return fallback?.trim() || "UTC";
+  }
+  try {
+    const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    return tz?.trim() || fallback?.trim() || "UTC";
+  } catch {
+    return fallback?.trim() || "UTC";
+  }
+}
+
+const CALENDAR_PROBE_MS = 15_000;
+const MAX_CALENDAR_LOOKAHEAD_MS = 48 * 60 * 60 * 1000;
+
+/** Milliseconds until the calendar date next changes in the given timezone (local midnight). */
+export function msUntilNextCalendarMidnight(timeZone: string, reference: Date = new Date()): number {
+  const current = isoDateInTimeZone(reference, timeZone);
+  let probe = reference.getTime() + 1000;
+  const limit = reference.getTime() + MAX_CALENDAR_LOOKAHEAD_MS;
+
+  while (probe <= limit) {
+    if (isoDateInTimeZone(new Date(probe), timeZone) !== current) {
+      return Math.max(1000, probe - reference.getTime());
+    }
+    probe += CALENDAR_PROBE_MS;
+  }
+
+  return 60_000;
+}

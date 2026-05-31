@@ -3,10 +3,12 @@ import { isoDateInTimeZone } from "@/lib/today-server";
 
 import type { DayBoundarySettings } from "@/types/lume";
 
-/** Default: calendar day starts at midnight; rolls forward at 3:00 AM. */
+/** Default focus reset time (3:00 AM). */
+export const DEFAULT_DAY_END_TIME = "03:00";
+
+/** @deprecated Use {@link DEFAULT_DAY_END_TIME}. */
 export const DEFAULT_DAY_BOUNDARY: DayBoundarySettings = {
-  day_start_time: "00:00",
-  day_end_time: "03:00",
+  day_end_time: DEFAULT_DAY_END_TIME,
 };
 
 /** Normalize Postgres `time` (`HH:MM:SS`) or `HH:MM` to five-char `HH:MM`. */
@@ -43,24 +45,21 @@ export function timeMinutesInTimeZone(reference: Date, timeZone: string): number
 }
 
 /**
- * Resolve the active Lume day (`yyyy-MM-dd`) for focus, logs, and mini-task "today".
+ * Resolve the active focus day (`yyyy-MM-dd`) for today-selection pins.
  *
- * Overnight model (typical): a day labeled D runs until `day_end_time` the next morning.
- * Between `day_end_time` and `day_start_time` (when start is later), the previous day still applies.
- *
- * When start === end, the boundary follows the calendar date (midnight rollover).
+ * Focus resets when `day_end_time` is crossed. At midnight (00:00), focus follows
+ * the calendar date. Otherwise focus for day D persists until `day_end_time` the next morning.
  */
-export function getLumeDayISO(
+export function getFocusDayISO(
   timeZone: string,
   boundary: DayBoundarySettings,
   reference: Date = new Date(),
 ): string {
   const calendarDate = isoDateInTimeZone(reference, timeZone);
-  const startMin = parseTimeToMinutes(boundary.day_start_time);
   const endMin = parseTimeToMinutes(boundary.day_end_time);
   const nowMin = timeMinutesInTimeZone(reference, timeZone);
 
-  if (startMin === endMin) {
+  if (endMin === 0) {
     return calendarDate;
   }
 
@@ -68,9 +67,38 @@ export function getLumeDayISO(
     return isoCalendarAdd(calendarDate, -1);
   }
 
-  if (startMin > endMin && nowMin < startMin) {
-    return isoCalendarAdd(calendarDate, -1);
+  return calendarDate;
+}
+
+/** @deprecated Use {@link getFocusDayISO}. */
+export const getLumeDayISO = getFocusDayISO;
+
+const BOUNDARY_PROBE_MS = 15_000;
+const MAX_BOUNDARY_LOOKAHEAD_MS = 48 * 60 * 60 * 1000;
+
+/** Milliseconds until the focus-day label next changes (at boundary end). */
+export function msUntilNextFocusDayBoundary(
+  timeZone: string,
+  boundary: DayBoundarySettings,
+  reference: Date = new Date(),
+): number {
+  const current = getFocusDayISO(timeZone, boundary, reference);
+  let probe = reference.getTime() + 1000;
+  const limit = reference.getTime() + MAX_BOUNDARY_LOOKAHEAD_MS;
+
+  while (probe <= limit) {
+    if (getFocusDayISO(timeZone, boundary, new Date(probe)) !== current) {
+      return Math.max(1000, probe - reference.getTime());
+    }
+    probe += BOUNDARY_PROBE_MS;
   }
 
-  return calendarDate;
+  return 60_000;
+}
+
+/** @deprecated Use {@link msUntilNextFocusDayBoundary}. */
+export const msUntilNextLumeDayBoundary = msUntilNextFocusDayBoundary;
+
+export function dayBoundaryKey(boundary: DayBoundarySettings): string {
+  return boundary.day_end_time;
 }

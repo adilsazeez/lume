@@ -1,11 +1,11 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import type { CategoryRow, DailyLogRow, DashboardPayload, MiniTaskRow, ThreadCanvasPlacement, ThreadRow, TodaySelectionRow } from "@/types/lume";
-import { getLumeDayISO } from "@/lib/lume-day";
+import { getFocusDayISO } from "@/lib/lume-day";
 import { compareTimelineThreadOrder, showsOnTimeline } from "@/lib/thread-status";
 import { canShowInDormantDock, compareDormantThreads, isOnCanvas, normalizeCanvasPlacement } from "@/lib/thread-placement";
 import { fetchUserSettings, toDayBoundary } from "@/lib/user-settings";
-import { getServerTimezone } from "@/lib/today-server";
+import { getServerTimezone, getTodayISO } from "@/lib/today-server";
 
 async function hydratePayload(
   supabase: SupabaseClient,
@@ -13,7 +13,9 @@ async function hydratePayload(
   reference: Date,
 ): Promise<DashboardPayload> {
   const userSettings = await fetchUserSettings(supabase);
-  const lumeDayISO = getLumeDayISO(dateTimezone, toDayBoundary(userSettings), reference);
+  const dayBoundary = toDayBoundary(userSettings);
+  const calendarTodayISO = getTodayISO(dateTimezone, reference);
+  const focusDayISO = getFocusDayISO(dateTimezone, dayBoundary, reference);
 
   const [catRes, threadRes, miniTaskRes] = await Promise.all([
     supabase.from("categories").select("*").order("name", { ascending: true }),
@@ -85,13 +87,13 @@ async function hydratePayload(
       supabase
         .from("today_selections")
         .select("*")
-        .eq("selected_date", lumeDayISO)
+        .eq("selected_date", focusDayISO)
         .eq("is_selected", true)
         .in("thread_id", timelineIds),
       supabase
         .from("daily_logs")
         .select("*")
-        .eq("log_date", lumeDayISO)
+        .eq("log_date", calendarTodayISO)
         .in("thread_id", timelineIds),
     ]);
 
@@ -109,7 +111,8 @@ async function hydratePayload(
     todaySelections,
     todayLogs,
     miniTasks,
-    serverTodayISO: lumeDayISO,
+    serverTodayISO: calendarTodayISO,
+    serverFocusDayISO: focusDayISO,
     dateTimezone,
     userSettings,
   };

@@ -28,11 +28,14 @@ import { createBrowserSupabase } from "@/lib/supabase/browser";
 import { defaultCanvasPlacement, isOnCanvas, splitThreadLists } from "@/lib/thread-placement";
 import { isNotStartedStatus, placeholderThreadDates } from "@/lib/thread-status";
 import { isoCalendarAdd } from "@/lib/timeline";
-import { getLumeDayISO } from "@/lib/lume-day";
+import { dayBoundaryKey, getFocusDayISO, msUntilNextFocusDayBoundary } from "@/lib/lume-day";
 import { LOCAL_USER_SETTINGS_ID, clearPanelPosition, persistPanelPosition, toDayBoundary, toPostgresTime } from "@/lib/user-settings";
+
+import { getBrowserTimezone, getTodayISO, msUntilNextCalendarMidnight } from "@/lib/today-server";
 
 import { ThreadDragProvider } from "@/hooks/use-thread-drag-state";
 import { useDayRolloverRefresh } from "@/hooks/use-day-rollover-refresh";
+import { useLiveCalendarTodayISO, useLiveFocusDayISO } from "@/hooks/use-live-lume-day";
 import { useLumeShortcuts } from "@/hooks/use-lume-shortcuts";
 import { useTodayFocusStore } from "@/stores/lume-store";
 
@@ -78,8 +81,10 @@ export function LumeDashboard(props: { initial: DashboardPayload | null }) {
 
 function DashboardBody({ initial }: { initial: DashboardPayload }) {
   const isoRef = React.useRef(initial.serverTodayISO);
+  const initialDateTimezoneRef = React.useRef(initial.dateTimezone);
 
   const [dash, setDash] = React.useState(initial);
+  const [dateTimezone, setDateTimezone] = React.useState(() => getBrowserTimezone(initial.dateTimezone));
   const [syncing, setSyncing] = React.useState(false);
   const [busy, setBusy] = React.useState(false);
 
@@ -106,6 +111,7 @@ function DashboardBody({ initial }: { initial: DashboardPayload }) {
   const overlayShellRef = React.useRef<HTMLDivElement>(null);
   const userSettingsRef = React.useRef(initial.userSettings);
   userSettingsRef.current = dash.userSettings;
+  const reloadInFlightRef = React.useRef(false);
 
   React.useEffect(() => {
     if (!placementToast) return;
@@ -113,30 +119,117 @@ function DashboardBody({ initial }: { initial: DashboardPayload }) {
     return () => window.clearTimeout(timer);
   }, [placementToast]);
 
-  React.useEffect(() => {
-    isoRef.current = dash.serverTodayISO;
-  }, [dash.serverTodayISO]);
-
-  const todayFocusActive = useTodayFocusStore((s) => s.todayFocusActive);
-
-  const selectedToday = React.useMemo(
-    () =>
-      new Set<string>(dash.todaySelections.filter((row) => row.is_selected === true).map((row) => row.thread_id)),
-    [dash.todaySelections],
-  );
-  const selectionCount = selectedToday.size;
-
   const dayBoundary = React.useMemo(
     () => toDayBoundary(dash.userSettings),
     [dash.userSettings],
   );
 
-  const resolveLumeDayISO = React.useCallback(
-    () => getLumeDayISO(dash.dateTimezone, dayBoundary),
-    [dash.dateTimezone, dayBoundary],
+  const calendarTodayISO = useLiveCalendarTodayISO(dateTimezone);
+  const focusDayISO = useLiveFocusDayISO(dateTimezone, dayBoundary);
+  const serverFocusDayISO = dash.serverFocusDayISO ?? dash.serverTodayISO;
+
+  const todayCue = React.useMemo(
+    () => format(utcMiddayDate(calendarTodayISO), "EEE MMM d"),
+    [calendarTodayISO],
   );
 
-  const todayCue = React.useMemo(() => format(utcMiddayDate(dash.serverTodayISO), "EEE MMM d"), [dash.serverTodayISO]);
+  const resolveCalendarDayISO = React.useCallback(
+    (reference?: Date) => getTodayISO(dateTimezone, reference),
+    [dateTimezone],
+  );
+  const msUntilCalendarMidnight = React.useCallback(
+    (reference?: Date) => msUntilNextCalendarMidnight(dateTimezone, reference),
+    [dateTimezone],
+  );
+  const resolveFocusDayISO = React.useCallback(
+    (reference?: Date) => getFocusDayISO(dateTimezone, dayBoundary, reference),
+    [dateTimezone, dayBoundary],
+  );
+  const msUntilFocusBoundary = React.useCallback(
+    (reference?: Date) => msUntilNextFocusDayBoundary(dateTimezone, dayBoundary, reference),
+    [dateTimezone, dayBoundary],
+  );
+
+  React.useEffect(() => {
+    isoRef.current = calendarTodayISO;
+  }, [calendarTodayISO]);
+
+  React.useEffect(() => {
+    const clientTz = getBrowserTimezone(dash.dateTimezone);
+    if (clientTz !== dateTimezone) {
+      setDateTimezone(clientTz);
+    }
+  }, [dash.dateTimezone, dateTimezone]);
+
+  const reload = React.useCallback(async () => {
+    if (reloadInFlightRef.current) return;
+    reloadInFlightRef.current = true;
+    setSyncing(true);
+
+    try {
+      const sb = createBrowserSupabase();
+      const next = await hydrateDashboardPayload(sb, dateTimezone);
+      isoRef.current = next.serverTodayISO;
+      setDash(next);
+    } catch {
+      /* ignore */
+    } finally {
+      reloadInFlightRef.current = false;
+      setSyncing(false);
+    }
+  }, [dateTimezone]);
+
+  React.useEffect(() => {
+    if (dateTimezone === initialDateTimezoneRef.current) return;
+    void reload();
+  }, [dateTimezone, reload]);
+
+  useDayRolloverRefresh({
+    dateTimezone,
+    resolveDayISO: resolveCalendarDayISO,
+    msUntilNextChange: msUntilCalendarMidnight,
+    activeDayISO: dash.serverTodayISO,
+    onRollover: reload,
+    depsKey: "calendar",
+  });
+
+  useDayRolloverRefresh({
+    dateTimezone,
+    resolveDayISO: resolveFocusDayISO,
+    msUntilNextChange: msUntilFocusBoundary,
+    activeDayISO: serverFocusDayISO,
+    onRollover: reload,
+    depsKey: dayBoundaryKey(dayBoundary),
+  });
+
+  React.useEffect(() => {
+    const calendarStale = calendarTodayISO !== dash.serverTodayISO;
+    const focusStale = focusDayISO !== serverFocusDayISO;
+    if (!calendarStale && !focusStale) return;
+    void reload();
+  }, [calendarTodayISO, focusDayISO, dash.serverTodayISO, serverFocusDayISO, reload]);
+
+  // Clear stale focus pins immediately when the live focus day advances (don't wait for reload).
+  React.useEffect(() => {
+    if (focusDayISO === serverFocusDayISO) return;
+    setDash((prev) => (prev.todaySelections.length === 0 ? prev : { ...prev, todaySelections: [] }));
+  }, [focusDayISO, serverFocusDayISO]);
+
+  const todayFocusActive = useTodayFocusStore((s) => s.todayFocusActive);
+
+  const selectedToday = React.useMemo(() => {
+    if (focusDayISO !== serverFocusDayISO) {
+      return new Set<string>();
+    }
+
+    return new Set<string>(
+      dash.todaySelections
+        .filter((row) => row.is_selected && row.selected_date === focusDayISO)
+        .map((row) => row.thread_id),
+    );
+  }, [dash.todaySelections, focusDayISO, serverFocusDayISO]);
+  const selectionCount = selectedToday.size;
+
   const timelineOrder = React.useMemo(
     () => new Map<string, number>(dash.timelineThreads.map((t, idx) => [t.id, idx])),
     [dash.timelineThreads],
@@ -206,8 +299,8 @@ function DashboardBody({ initial }: { initial: DashboardPayload }) {
   const detailThreadTasks = React.useMemo(() => {
     if (!detailId) return [];
     const open = dash.miniTasks.filter((t) => t.thread_id === detailId && isOpenMiniTask(t.status));
-    return sortMiniTasks(open, dash.serverTodayISO);
-  }, [detailId, dash.miniTasks, dash.serverTodayISO]);
+    return sortMiniTasks(open, calendarTodayISO);
+  }, [detailId, dash.miniTasks, calendarTodayISO]);
 
   const openThreadDetail = React.useCallback(
     (threadId: string) => {
@@ -243,28 +336,6 @@ function DashboardBody({ initial }: { initial: DashboardPayload }) {
     void loadDetailLogs(detailId);
   }, [detailId, loadDetailLogs]);
 
-  const reload = React.useCallback(async () => {
-    setSyncing(true);
-
-    try {
-      const sb = createBrowserSupabase();
-      const next = await hydrateDashboardPayload(sb, dash.dateTimezone);
-      isoRef.current = next.serverTodayISO;
-      setDash(next);
-    } catch {
-      /* ignore */
-    } finally {
-      setSyncing(false);
-    }
-  }, [dash.dateTimezone]);
-
-  useDayRolloverRefresh({
-    dateTimezone: dash.dateTimezone,
-    dayBoundary,
-    activeTodayISO: dash.serverTodayISO,
-    onRollover: reload,
-  });
-
   const saveThread = async (payload: {
     id?: string;
     name: string;
@@ -279,7 +350,6 @@ function DashboardBody({ initial }: { initial: DashboardPayload }) {
 
     try {
       const sb = createBrowserSupabase();
-      const todayISO = dash.serverTodayISO || resolveLumeDayISO();
       const body: {
         name: string;
         description: string;
@@ -300,7 +370,7 @@ function DashboardBody({ initial }: { initial: DashboardPayload }) {
 
       if (!payload.id) {
         const dates = isNotStartedStatus(payload.status)
-          ? placeholderThreadDates(todayISO)
+          ? placeholderThreadDates(calendarTodayISO)
           : { start_date: payload.start_date, due_date: payload.due_date };
 
         if (!dates.start_date || !dates.due_date) {
@@ -368,7 +438,7 @@ function DashboardBody({ initial }: { initial: DashboardPayload }) {
 
     try {
       const sb = createBrowserSupabase();
-      const iso = dash.serverTodayISO;
+      const iso = focusDayISO;
 
       if (nextFlag) {
         const { error } = await sb.from("today_selections").upsert(
@@ -404,7 +474,7 @@ function DashboardBody({ initial }: { initial: DashboardPayload }) {
       const { error } = await sb.from("threads").update(snapshot).eq("id", threadId);
       if (error) throw error;
 
-      const iso = dash.serverTodayISO;
+      const iso = focusDayISO;
       if (hadTodaySelection) {
         await sb.from("today_selections").upsert(
           { thread_id: threadId, selected_date: iso, is_selected: true },
@@ -420,14 +490,13 @@ function DashboardBody({ initial }: { initial: DashboardPayload }) {
     } finally {
       setBusy(false);
     }
-  }, [dash.serverTodayISO, patchThreadsLocal, reload]);
+  }, [focusDayISO, patchThreadsLocal, reload]);
 
   const activateThread = React.useCallback(
     async (threadId: string) => {
       const thread = dash.allThreads?.find((t) => t.id === threadId);
       if (!thread || isOnCanvas(thread)) return;
 
-      const todayISO = dash.serverTodayISO || resolveLumeDayISO();
       const snapshot = {
         canvas_placement: thread.canvas_placement,
         status: thread.status,
@@ -439,8 +508,8 @@ function DashboardBody({ initial }: { initial: DashboardPayload }) {
       const updates: Partial<ThreadRow> = { canvas_placement: "active" };
       if (isNotStartedStatus(thread.status)) {
         updates.status = "active";
-        updates.start_date = todayISO;
-        updates.due_date = isoCalendarAdd(todayISO, 6);
+        updates.start_date = calendarTodayISO;
+        updates.due_date = isoCalendarAdd(calendarTodayISO, 6);
       }
 
       patchThreadsLocal(threadId, updates);
@@ -461,7 +530,7 @@ function DashboardBody({ initial }: { initial: DashboardPayload }) {
         setBusy(false);
       }
     },
-    [dash.allThreads, dash.serverTodayISO, dash.dateTimezone, patchThreadsLocal, reload, selectedToday],
+    [dash.allThreads, calendarTodayISO, dateTimezone, patchThreadsLocal, reload, selectedToday],
   );
 
   const parkThread = React.useCallback(
@@ -484,7 +553,7 @@ function DashboardBody({ initial }: { initial: DashboardPayload }) {
       setBusy(true);
       try {
         const sb = createBrowserSupabase();
-        const iso = dash.serverTodayISO;
+        const iso = focusDayISO;
         const { error } = await sb.from("threads").update({ canvas_placement: "dormant" }).eq("id", threadId);
         if (error) throw error;
 
@@ -502,7 +571,7 @@ function DashboardBody({ initial }: { initial: DashboardPayload }) {
         setBusy(false);
       }
     },
-    [dash.allThreads, dash.serverTodayISO, detailId, patchThreadsLocal, reload, selectedToday],
+    [dash.allThreads, focusDayISO, detailId, patchThreadsLocal, reload, selectedToday],
   );
 
   async function persistNoteNow() {
@@ -512,7 +581,7 @@ function DashboardBody({ initial }: { initial: DashboardPayload }) {
     if (!trimmed) return;
 
     const threadId = detailId;
-    const logDate = dash.serverTodayISO;
+    const logDate = calendarTodayISO;
     const draftSnapshot = detailDraft;
     const now = new Date().toISOString();
 
@@ -670,7 +739,7 @@ function DashboardBody({ initial }: { initial: DashboardPayload }) {
         thread_id: payload.thread_id,
         title: payload.title,
         note: "note" in payload ? (payload.note ?? null) : null,
-        due_date: "due_date" in payload ? (payload.due_date ?? null) : dash.serverTodayISO,
+        due_date: "due_date" in payload ? (payload.due_date ?? null) : calendarTodayISO,
         priority: "priority" in payload ? (payload.priority ?? null) : null,
         status: "open" as const,
       };
@@ -787,14 +856,13 @@ function DashboardBody({ initial }: { initial: DashboardPayload }) {
     }
   }, []);
 
-  const saveUserSettings = async (payload: { day_start_time: string; day_end_time: string }) => {
+  const saveUserSettings = async (payload: { day_end_time: string }) => {
     setBusy(true);
 
     try {
       const sb = createBrowserSupabase();
       const body = {
         id: LOCAL_USER_SETTINGS_ID,
-        day_start_time: toPostgresTime(payload.day_start_time),
         day_end_time: toPostgresTime(payload.day_end_time),
         panel_positions: userSettingsRef.current.panel_positions,
       };
@@ -901,7 +969,7 @@ function DashboardBody({ initial }: { initial: DashboardPayload }) {
           busy={busy}
           threads={threadPickerRows}
           presetThreadId={miniTaskPresetThreadId}
-          todayISO={dash.serverTodayISO}
+          todayISO={calendarTodayISO}
           onSubmit={(p) => createMiniTask(p)}
           onOpenChange={(v) => {
             setMiniTaskFormOpen(v);
@@ -927,7 +995,7 @@ function DashboardBody({ initial }: { initial: DashboardPayload }) {
                 : (
                   <TimelineCanvas
                     threadViews={threadViews}
-                    todayISO={dash.serverTodayISO}
+                    todayISO={calendarTodayISO}
                     busy={busy}
                     focusViewOn={todayFocusActive}
                     focusCount={selectionCount}
@@ -971,7 +1039,7 @@ function DashboardBody({ initial }: { initial: DashboardPayload }) {
               onResetPosition={() => void resetPanelPosition("mini_tasks")}
               tasks={dash.miniTasks}
               threads={threadPickerRows}
-              todayISO={dash.serverTodayISO}
+              todayISO={calendarTodayISO}
               busy={busy}
               onStatusChange={(taskId, status) => void updateMiniTaskStatus(taskId, status)}
               onTitleChange={(taskId, title) => void updateMiniTaskTitle(taskId, title)}
@@ -1006,14 +1074,14 @@ function DashboardBody({ initial }: { initial: DashboardPayload }) {
         open={Boolean(detailRecord && detailId)}
         busy={busy}
         thread={detailRecord}
-        todayISO={dash.serverTodayISO}
+        todayISO={calendarTodayISO}
         noteDraft={detailDraft}
         onNoteDraftChange={setDetailDraft}
         progressLogs={detailLogs}
         onCommitNoteNow={() => persistNoteNow()}
         isSelectedToday={
           dash.todaySelections.some(
-            (s) => s.thread_id === detailId && s.is_selected && s.selected_date === dash.serverTodayISO,
+            (s) => s.thread_id === detailId && s.is_selected && s.selected_date === focusDayISO,
           )
         }
         onToggleTodayFocus={async (v) => {

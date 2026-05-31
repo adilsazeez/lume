@@ -33,23 +33,18 @@ export function SettingsDialog({
   busy?: boolean;
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onSave: (payload: { day_start_time: string; day_end_time: string }) => Promise<void>;
+  onSave: (payload: { day_end_time: string }) => Promise<void>;
 }) {
-  const [dayStart, setDayStart] = React.useState(settings.day_start_time);
   const [dayEnd, setDayEnd] = React.useState(settings.day_end_time);
 
   React.useEffect(() => {
     if (!open) return;
-    setDayStart(normalizeTimeOfDay(settings.day_start_time));
     setDayEnd(normalizeTimeOfDay(settings.day_end_time));
-  }, [open, settings.day_start_time, settings.day_end_time]);
+  }, [open, settings.day_end_time]);
 
   async function handleSubmit(event: FormEvent) {
     event.preventDefault();
-    await onSave({
-      day_start_time: normalizeTimeOfDay(dayStart),
-      day_end_time: normalizeTimeOfDay(dayEnd),
-    });
+    await onSave({ day_end_time: normalizeTimeOfDay(dayEnd) });
     onOpenChange(false);
   }
 
@@ -61,34 +56,24 @@ export function SettingsDialog({
             <DialogTitle className="text-[15px] font-medium">Day boundary</DialogTitle>
           </DialogHeader>
 
-          <div className="grid grid-cols-2 gap-3 px-5 py-4">
-            <div className="space-y-1.5">
-              <Label htmlFor="day-start-time" className="text-[11px] text-muted-foreground">
-                Start
-              </Label>
-              <Input
-                id="day-start-time"
-                type="time"
-                disabled={busy}
-                value={dayStart}
-                onChange={(e) => setDayStart(e.target.value)}
-                className={cn(timeInputClass, "appearance-none")}
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="day-end-time" className="text-[11px] text-muted-foreground">
-                End
-              </Label>
-              <Input
-                id="day-end-time"
-                type="time"
-                disabled={busy}
-                value={dayEnd}
-                onChange={(e) => setDayEnd(e.target.value)}
-                className={cn(timeInputClass, "appearance-none")}
-              />
-            </div>
+          <div className="space-y-1.5 px-5 py-4">
+            <Label htmlFor="day-end-time" className="text-[11px] text-muted-foreground">
+              Focus reset time
+            </Label>
+            <Input
+              id="day-end-time"
+              type="time"
+              disabled={busy}
+              value={dayEnd}
+              onChange={(e) => setDayEnd(e.target.value)}
+              className={cn(timeInputClass, "appearance-none")}
+            />
           </div>
+
+          <p className="px-5 pb-4 text-[11px] leading-relaxed text-muted-foreground">
+            The header date follows your timezone at midnight. Focus threads reset at this time — use 12:00 AM to
+            reset at midnight.
+          </p>
 
           <DialogFooter className="!m-0 gap-2 border-t border-lume-border-strong bg-transparent px-5 py-3 sm:flex-row sm:justify-end">
             <Button type="button" variant="ghost" size="sm" disabled={busy} onClick={() => onOpenChange(false)}>

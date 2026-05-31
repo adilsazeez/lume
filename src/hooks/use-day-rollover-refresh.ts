@@ -2,32 +2,37 @@
 
 import * as React from "react";
 
-import { getLumeDayISO } from "@/lib/lume-day";
-import type { DayBoundarySettings } from "@/types/lume";
+const FALLBACK_POLL_MS = 30_000;
 
-const DEFAULT_POLL_MS = 60_000;
+type DayRolloverConfig = {
+  dateTimezone: string;
+  resolveDayISO: (reference?: Date) => string;
+  msUntilNextChange: (reference?: Date) => number;
+  activeDayISO: string;
+  onRollover: () => void | Promise<void>;
+  depsKey: string;
+  enabled?: boolean;
+  pollMs?: number;
+};
 
 /**
- * Detects Lume-day rollover (custom boundary) and triggers a refresh.
- * Checks on an interval, when the tab becomes visible, and on window focus.
+ * Detects a day label change and triggers a refresh.
+ * Schedules the next transition, polls as a fallback, and checks on focus/visibility.
  */
 export function useDayRolloverRefresh({
   dateTimezone,
-  dayBoundary,
-  activeTodayISO,
+  resolveDayISO,
+  msUntilNextChange,
+  activeDayISO,
   onRollover,
-  pollMs = DEFAULT_POLL_MS,
+  depsKey,
   enabled = true,
-}: {
-  dateTimezone: string;
-  dayBoundary: DayBoundarySettings;
-  activeTodayISO: string;
-  onRollover: () => void | Promise<void>;
-  pollMs?: number;
-  enabled?: boolean;
-}) {
+  pollMs = FALLBACK_POLL_MS,
+}: DayRolloverConfig) {
   const onRolloverRef = React.useRef(onRollover);
-  const activeTodayRef = React.useRef(activeTodayISO);
+  const activeDayRef = React.useRef(activeDayISO);
+  const resolveDayISORef = React.useRef(resolveDayISO);
+  const msUntilNextChangeRef = React.useRef(msUntilNextChange);
   const inFlightRef = React.useRef(false);
 
   React.useEffect(() => {
@@ -35,25 +40,42 @@ export function useDayRolloverRefresh({
   }, [onRollover]);
 
   React.useEffect(() => {
-    activeTodayRef.current = activeTodayISO;
-  }, [activeTodayISO]);
+    activeDayRef.current = activeDayISO;
+  }, [activeDayISO]);
+
+  React.useEffect(() => {
+    resolveDayISORef.current = resolveDayISO;
+    msUntilNextChangeRef.current = msUntilNextChange;
+  }, [resolveDayISO, msUntilNextChange]);
 
   React.useEffect(() => {
     if (!enabled || !dateTimezone) return;
 
-    const check = () => {
-      if (inFlightRef.current) return;
+    let cancelled = false;
+    let boundaryTimeoutId = 0;
 
-      const nowToday = getLumeDayISO(dateTimezone, dayBoundary);
-      if (nowToday === activeTodayRef.current) return;
+    const check = () => {
+      if (cancelled || inFlightRef.current) return;
+
+      const nowDay = resolveDayISORef.current();
+      if (nowDay === activeDayRef.current) return;
 
       inFlightRef.current = true;
       void Promise.resolve(onRolloverRef.current()).finally(() => {
         inFlightRef.current = false;
+        if (!cancelled) scheduleBoundary();
       });
     };
 
+    const scheduleBoundary = () => {
+      if (cancelled) return;
+      window.clearTimeout(boundaryTimeoutId);
+      const delay = msUntilNextChangeRef.current();
+      boundaryTimeoutId = window.setTimeout(check, delay);
+    };
+
     check();
+    scheduleBoundary();
 
     const intervalId = window.setInterval(check, pollMs);
     const onVisibility = () => {
@@ -65,9 +87,11 @@ export function useDayRolloverRefresh({
     window.addEventListener("focus", onFocus);
 
     return () => {
+      cancelled = true;
+      window.clearTimeout(boundaryTimeoutId);
       window.clearInterval(intervalId);
       document.removeEventListener("visibilitychange", onVisibility);
       window.removeEventListener("focus", onFocus);
     };
-  }, [dateTimezone, dayBoundary, enabled, pollMs]);
+  }, [dateTimezone, depsKey, enabled, pollMs]);
 }

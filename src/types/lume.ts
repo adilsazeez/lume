@@ -61,7 +61,6 @@ export type MiniTaskRow = {
 export type MiniTaskFilter = "all" | "today" | "upcoming" | "done";
 
 export type DayBoundarySettings = {
-  day_start_time: string;
   day_end_time: string;
 };
 
@@ -76,7 +75,6 @@ export type PanelPositions = Partial<Record<PanelPositionKey, PanelPosition>>;
 
 export type UserSettingsRow = {
   id: string;
-  day_start_time: string;
   day_end_time: string;
   panel_positions: PanelPositions | null;
   created_at: string;
@@ -91,8 +89,10 @@ export type DashboardPayload = {
   todaySelections: TodaySelectionRow[];
   todayLogs: DailyLogRow[];
   miniTasks: MiniTaskRow[];
-  /** Active Lume day (`yyyy-MM-dd`) — respects custom day boundary, not strict midnight. */
+  /** Calendar today (`yyyy-MM-dd`) in `dateTimezone` — rolls at local midnight. */
   serverTodayISO: string;
+  /** Focus day (`yyyy-MM-dd`) — today-selection pins roll at day boundary end. */
+  serverFocusDayISO: string;
   /** IANA timezone used for day-boundary calculations. */
   dateTimezone: string;
   userSettings: UserSettingsRow;
