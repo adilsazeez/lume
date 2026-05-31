@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { CheckSquare, GripVertical, Info } from "lucide-react";
+import { ArrowDownRight, CheckSquare, GripVertical, Info } from "lucide-react";
 
 import type { MiniTaskFilter, MiniTaskPriority, MiniTaskRow, MiniTaskStatus, ThreadRow } from "@/types/lume";
 
@@ -10,13 +10,12 @@ import { QuickAddMiniTask } from "@/components/lume/quick-add-mini-task";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 
 import { filterMiniTasks, sortMiniTasks } from "@/lib/mini-tasks";
+import { FLOATING_PANEL_SIZE_CLASS } from "@/lib/floating-panels";
 import { WORKFLOW_COPY } from "@/lib/lume-workflow";
 import { isOnCanvas } from "@/lib/thread-placement";
 import { cn } from "@/lib/utils";
 
 import { useDraggablePanel } from "@/hooks/use-draggable-panel";
-
-const MINI_TASKS_POSITION_KEY = "lume:mini-tasks-dock-position";
 
 const FILTERS: { key: MiniTaskFilter; label: string }[] = [
   { key: "all", label: "All" },
@@ -31,6 +30,9 @@ export function MiniTaskPanel({
   todayISO,
   busy,
   boundsRef,
+  initialPosition = null,
+  onPersistPosition,
+  onResetPosition,
   onStatusChange,
   onTitleChange,
   onNoteChange,
@@ -44,6 +46,9 @@ export function MiniTaskPanel({
   todayISO: string;
   busy?: boolean;
   boundsRef: React.RefObject<HTMLElement | null>;
+  initialPosition?: { x: number; y: number } | null;
+  onPersistPosition?: (position: { x: number; y: number }) => void;
+  onResetPosition?: () => void;
   onStatusChange: (taskId: string, status: MiniTaskStatus) => void;
   onTitleChange: (taskId: string, title: string) => void;
   onNoteChange: (taskId: string, note: string | null) => void;
@@ -56,11 +61,13 @@ export function MiniTaskPanel({
   const [expandedTaskId, setExpandedTaskId] = React.useState<string | null>(null);
   const listRef = React.useRef<HTMLDivElement>(null);
   const panelRef = React.useRef<HTMLElement>(null);
-  const { position, isDragging, dragHandleProps } = useDraggablePanel({
+  const { position, isDragging, resetPosition, dragHandleProps } = useDraggablePanel({
     boundsRef,
     panelRef,
-    storageKey: MINI_TASKS_POSITION_KEY,
-    defaultCorner: "top-right",
+    initialPosition,
+    onPersistPosition,
+    defaultCorner: "bottom-right",
+    reserveRightPx: 0,
   });
 
   React.useEffect(() => {
@@ -119,13 +126,17 @@ export function MiniTaskPanel({
       ref={panelRef}
       aria-label="Mini-tasks"
       data-no-pan
-      style={position ? { left: position.x, top: position.y } : undefined}
+      style={
+        position ?
+          { left: position.x, top: position.y, right: "auto", bottom: "auto" }
+        : undefined
+      }
       className={cn(
-        "pointer-events-auto absolute z-50 flex w-[min(100%,20rem)] flex-col overflow-hidden rounded-xl border shadow-lg backdrop-blur-md",
+        "pointer-events-auto absolute z-50 flex flex-col overflow-hidden rounded-xl border shadow-lg backdrop-blur-md",
+        FLOATING_PANEL_SIZE_CLASS,
         "border-lume-border-strong bg-lume-panel/92",
         "shadow-[0_8px_32px_rgb(0_0_0_/_0.35),inset_0_1px_0_rgb(255_255_255_/_0.06)]",
-        !position && "top-3 right-3 opacity-0",
-        position && "opacity-100",
+        !position && "bottom-3 right-3",
         isDragging && "select-none",
       )}
     >
@@ -150,6 +161,26 @@ export function MiniTaskPanel({
               <span className="inline-block w-[2.125rem]">tasks</span>
             </p>
           </div>
+          <Tooltip>
+            <TooltipTrigger
+              render={
+                <button
+                  type="button"
+                  className="shrink-0 rounded p-0.5 text-lume-text-muted outline-none hover:text-foreground focus-visible:ring-1 focus-visible:ring-lume-focus"
+                  aria-label="Reset position"
+                  onClick={() => {
+                    resetPosition();
+                    onResetPosition?.();
+                  }}
+                >
+                  <ArrowDownRight className="size-3" aria-hidden />
+                </button>
+              }
+            />
+            <TooltipContent side="top" align="end">
+              Reset position
+            </TooltipContent>
+          </Tooltip>
           <Tooltip>
             <TooltipTrigger
               render={
@@ -199,7 +230,7 @@ export function MiniTaskPanel({
 
       <div
         ref={listRef}
-        className="max-h-[min(40vh,280px)] overflow-y-auto overscroll-y-contain px-1.5 py-2 scrollbar-y-hover"
+        className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain px-1.5 py-2 scrollbar-y-hover"
       >
         <MiniTaskList
           tasks={visibleTasks}

@@ -7,7 +7,6 @@ import type { ThreadRow } from "@/types/lume";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { EllipsisText } from "@/components/lume/ellipsis-text";
 import {
   Select,
   SelectContent,
@@ -43,6 +42,9 @@ export function QuickAddMiniTask({
     [threads],
   );
 
+  const soleThread = threads.length === 1 ? threads[0]! : null;
+  const selectedThread = threads.find((t) => t.id === threadId) ?? null;
+
   const handleSubmit = async (event?: React.FormEvent) => {
     event?.preventDefault();
     const trimmed = title.trim();
@@ -53,26 +55,10 @@ export function QuickAddMiniTask({
   };
 
   return (
-    <form onSubmit={(e) => void handleSubmit(e)} className="space-y-2 border-b border-lume-border px-2.5 pb-3 pt-1">
-      <div className="flex gap-1.5">
-        <Input
-          value={title}
-          disabled={busy || threads.length === 0}
-          placeholder="Quick add task…"
-          onChange={(e) => setTitle(e.target.value)}
-          className="h-8 flex-1 border-lume-border-strong bg-lume-surface text-[12px] placeholder:text-lume-text-muted"
-        />
-        <Button
-          type="submit"
-          size="sm"
-          disabled={busy || !title.trim() || !threadId}
-          className="h-8 shrink-0 px-2"
-          aria-label="Add task"
-        >
-          <Plus aria-hidden className="size-3.5" />
-        </Button>
-      </div>
-
+    <form
+      onSubmit={(e) => void handleSubmit(e)}
+      className="flex shrink-0 items-center gap-1 border-b border-lume-border/80 px-2 py-1"
+    >
       {threads.length > 1 ?
         <Select
           value={threadId}
@@ -81,25 +67,75 @@ export function QuickAddMiniTask({
           onValueChange={(v) => setThreadId(v ?? "")}
         >
           <SelectTrigger
+            size="sm"
+            aria-label="Thread for new task"
+            title={selectedThread?.name}
             className={cn(
-              "h-7 w-full border-lume-border-strong bg-transparent text-[10px] text-lume-text-muted",
+              "h-7 min-w-[5.25rem] max-w-[7.5rem] shrink-0 gap-0.5 rounded-md border-lume-border-strong bg-lume-surface/80 px-1 py-0",
+              "text-[10px] leading-none font-normal text-lume-text-muted shadow-none",
+              "[&_svg]:size-2.5 [&_svg]:opacity-50",
+              "*:data-[slot=select-value]:min-w-0 *:data-[slot=select-value]:truncate *:data-[slot=select-value]:text-[10px]",
             )}
           >
+            {selectedThread ?
+              <span
+                aria-hidden
+                className="size-1.5 shrink-0 rounded-full"
+                style={{ backgroundColor: selectedThread.color, opacity: 0.85 }}
+              />
+            : null}
             <SelectValue placeholder="Thread" />
           </SelectTrigger>
-          <SelectContent>
+          <SelectContent
+            align="start"
+            alignItemWithTrigger={false}
+            className="w-auto min-w-[12rem] max-w-[min(16rem,calc(100vw-2rem))]"
+          >
             {threads.map((t) => (
-              <SelectItem key={t.id} value={t.id}>
-                {t.name}
+              <SelectItem
+                key={t.id}
+                value={t.id}
+                className="py-1.5 pl-1.5 text-[11px] leading-snug [&_[data-slot=select-item-text]]:whitespace-normal [&_[data-slot=select-item-text]]:break-words"
+              >
+                <span className="flex items-start gap-1.5">
+                  <span
+                    aria-hidden
+                    className="mt-1 size-1.5 shrink-0 rounded-full"
+                    style={{ backgroundColor: t.color, opacity: 0.85 }}
+                  />
+                  <span>{t.name}</span>
+                </span>
               </SelectItem>
             ))}
           </SelectContent>
         </Select>
-      : threads.length === 1 ?
-        <p className="min-w-0 px-0.5">
-          <EllipsisText text={threads[0]!.name} lines={2} className="text-[10px] text-muted-foreground/60" />
-        </p>
+      : soleThread ?
+        <span
+          aria-hidden
+          className="size-1.5 shrink-0 rounded-full"
+          style={{ backgroundColor: soleThread.color, opacity: 0.85 }}
+          title={soleThread.name}
+        />
       : null}
+
+      <Input
+        value={title}
+        disabled={busy || threads.length === 0}
+        placeholder={threads.length === 0 ? "No active threads" : "Add task…"}
+        onChange={(e) => setTitle(e.target.value)}
+        className="h-7 min-w-0 flex-1 border-lume-border-strong bg-lume-surface/80 px-2 text-[11px] placeholder:text-lume-text-muted"
+      />
+
+      <Button
+        type="submit"
+        size="icon-sm"
+        variant="ghost"
+        disabled={busy || !title.trim() || !threadId}
+        className="size-7 shrink-0 text-lume-text-muted hover:text-foreground"
+        aria-label="Add task"
+      >
+        <Plus aria-hidden className="size-3.5" />
+      </Button>
     </form>
   );
 }

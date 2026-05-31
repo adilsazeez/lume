@@ -4,7 +4,7 @@ import * as React from "react";
 import { format } from "date-fns";
 import { Plus, Settings } from "lucide-react";
 
-import type { DashboardPayload, DailyLogRow, MiniTaskPriority, MiniTaskRow, MiniTaskStatus, ThreadCanvasPlacement, ThreadRow, ThreadStatus } from "@/types/lume";
+import type { DashboardPayload, DailyLogRow, MiniTaskPriority, MiniTaskRow, MiniTaskStatus, PanelPosition, PanelPositionKey, ThreadCanvasPlacement, ThreadRow, ThreadStatus } from "@/types/lume";
 
 import { Button } from "@/components/ui/button";
 import { CategoryManagerDialog } from "@/components/lume/category-manager-dialog";
@@ -29,10 +29,11 @@ import { defaultCanvasPlacement, isOnCanvas, splitThreadLists } from "@/lib/thre
 import { isNotStartedStatus, placeholderThreadDates } from "@/lib/thread-status";
 import { isoCalendarAdd } from "@/lib/timeline";
 import { getLumeDayISO } from "@/lib/lume-day";
-import { LOCAL_USER_SETTINGS_ID, toDayBoundary, toPostgresTime } from "@/lib/user-settings";
+import { LOCAL_USER_SETTINGS_ID, clearPanelPosition, persistPanelPosition, toDayBoundary, toPostgresTime } from "@/lib/user-settings";
 
 import { ThreadDragProvider } from "@/hooks/use-thread-drag-state";
 import { useDayRolloverRefresh } from "@/hooks/use-day-rollover-refresh";
+import { useLumeShortcuts } from "@/hooks/use-lume-shortcuts";
 import { useTodayFocusStore } from "@/stores/lume-store";
 
 type PlacementUndo = {
@@ -103,6 +104,8 @@ function DashboardBody({ initial }: { initial: DashboardPayload }) {
   } | null>(null);
   const placementUndoRef = React.useRef<PlacementUndo | null>(null);
   const overlayShellRef = React.useRef<HTMLDivElement>(null);
+  const userSettingsRef = React.useRef(initial.userSettings);
+  userSettingsRef.current = dash.userSettings;
 
   React.useEffect(() => {
     if (!placementToast) return;
@@ -645,6 +648,12 @@ function DashboardBody({ initial }: { initial: DashboardPayload }) {
     setMiniTaskFormOpen(true);
   }, []);
 
+  useLumeShortcuts({
+    enabled: !busy,
+    onNewTask: () => openMiniTaskComposer(),
+    onNewThread: () => openComposer(),
+  });
+
   const patchMiniTaskLocal = React.useCallback((taskId: string, patch: Partial<MiniTaskRow>) => {
     setDash((prev) => ({
       ...prev,
@@ -758,6 +767,26 @@ function DashboardBody({ initial }: { initial: DashboardPayload }) {
     }
   };
 
+  const savePanelPosition = React.useCallback(async (key: PanelPositionKey, position: PanelPosition) => {
+    try {
+      const sb = createBrowserSupabase();
+      const nextSettings = await persistPanelPosition(sb, userSettingsRef.current, key, position);
+      setDash((prev) => ({ ...prev, userSettings: nextSettings }));
+    } catch {
+      /* keep local layout for this session if save fails */
+    }
+  }, []);
+
+  const resetPanelPosition = React.useCallback(async (key: PanelPositionKey) => {
+    try {
+      const sb = createBrowserSupabase();
+      const nextSettings = await clearPanelPosition(sb, userSettingsRef.current, key);
+      setDash((prev) => ({ ...prev, userSettings: nextSettings }));
+    } catch {
+      /* keep local layout for this session if save fails */
+    }
+  }, []);
+
   const saveUserSettings = async (payload: { day_start_time: string; day_end_time: string }) => {
     setBusy(true);
 
@@ -767,6 +796,7 @@ function DashboardBody({ initial }: { initial: DashboardPayload }) {
         id: LOCAL_USER_SETTINGS_ID,
         day_start_time: toPostgresTime(payload.day_start_time),
         day_end_time: toPostgresTime(payload.day_end_time),
+        panel_positions: userSettingsRef.current.panel_positions,
       };
       const { error } = await sb.from("user_settings").upsert(body, { onConflict: "id" });
       if (error) throw error;
@@ -887,7 +917,7 @@ function DashboardBody({ initial }: { initial: DashboardPayload }) {
             onAddThread={() => openComposer()}
           />
 
-          <div ref={overlayShellRef} className="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+          <div ref={overlayShellRef} className="relative flex min-h-0 min-w-0 flex-1 flex-col">
             {hasAnyThreads ?
               <DroppableCanvasZone disabled={busy} onDropActivate={(id) => void activateThread(id)}>
                 {dash.timelineThreads.length === 0 ?
@@ -934,36 +964,40 @@ function DashboardBody({ initial }: { initial: DashboardPayload }) {
               </div>
             : null}
 
-            <div className="pointer-events-none absolute inset-0 z-50">
-              <MiniTaskPanel
-                boundsRef={overlayShellRef}
-                tasks={dash.miniTasks}
-                threads={threadPickerRows}
-                todayISO={dash.serverTodayISO}
-                busy={busy}
-                onStatusChange={(taskId, status) => void updateMiniTaskStatus(taskId, status)}
-                onTitleChange={(taskId, title) => void updateMiniTaskTitle(taskId, title)}
-                onNoteChange={(taskId, note) => void updateMiniTaskNote(taskId, note)}
-                onDueDateChange={(taskId, dueDate) => void updateMiniTaskDueDate(taskId, dueDate)}
-                onPriorityChange={(taskId, priority) => void updateMiniTaskPriority(taskId, priority)}
-                onDelete={(taskId) => void deleteMiniTask(taskId)}
-                onQuickAdd={(p) => createMiniTask(p)}
-              />
+            <MiniTaskPanel
+              boundsRef={overlayShellRef}
+              initialPosition={dash.userSettings.panel_positions?.mini_tasks ?? null}
+              onPersistPosition={(position) => void savePanelPosition("mini_tasks", position)}
+              onResetPosition={() => void resetPanelPosition("mini_tasks")}
+              tasks={dash.miniTasks}
+              threads={threadPickerRows}
+              todayISO={dash.serverTodayISO}
+              busy={busy}
+              onStatusChange={(taskId, status) => void updateMiniTaskStatus(taskId, status)}
+              onTitleChange={(taskId, title) => void updateMiniTaskTitle(taskId, title)}
+              onNoteChange={(taskId, note) => void updateMiniTaskNote(taskId, note)}
+              onDueDateChange={(taskId, dueDate) => void updateMiniTaskDueDate(taskId, dueDate)}
+              onPriorityChange={(taskId, priority) => void updateMiniTaskPriority(taskId, priority)}
+              onDelete={(taskId) => void deleteMiniTask(taskId)}
+              onQuickAdd={(p) => createMiniTask(p)}
+            />
 
-              {(dash.dormantThreads ?? []).length > 0 && hasAnyThreads ?
-                <DormantThreadsDock
-                  boundsRef={overlayShellRef}
-                  threads={dash.dormantThreads ?? []}
-                  busy={busy}
-                  onActivate={(id) => void activateThread(id)}
-                  onOpenThread={openThreadDetail}
-                  onDropToPark={(id) => {
-                    const t = dash.allThreads?.find((x) => x.id === id);
-                    if (t && isOnCanvas(t)) void parkThread(id);
-                  }}
-                />
-              : null}
-            </div>
+            {(dash.dormantThreads ?? []).length > 0 && hasAnyThreads ?
+              <DormantThreadsDock
+                boundsRef={overlayShellRef}
+                initialPosition={dash.userSettings.panel_positions?.dormant ?? null}
+                onPersistPosition={(position) => void savePanelPosition("dormant", position)}
+                onResetPosition={() => void resetPanelPosition("dormant")}
+                threads={dash.dormantThreads ?? []}
+                busy={busy}
+                onActivate={(id) => void activateThread(id)}
+                onOpenThread={openThreadDetail}
+                onDropToPark={(id) => {
+                  const t = dash.allThreads?.find((x) => x.id === id);
+                  if (t && isOnCanvas(t)) void parkThread(id);
+                }}
+              />
+            : null}
           </div>
         </div>
       </div>

@@ -65,10 +65,20 @@ export type DayBoundarySettings = {
   day_end_time: string;
 };
 
+export type PanelPosition = {
+  x: number;
+  y: number;
+};
+
+export type PanelPositionKey = "mini_tasks" | "dormant";
+
+export type PanelPositions = Partial<Record<PanelPositionKey, PanelPosition>>;
+
 export type UserSettingsRow = {
   id: string;
   day_start_time: string;
   day_end_time: string;
+  panel_positions: PanelPositions | null;
   created_at: string;
   updated_at: string;
 };
